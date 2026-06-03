@@ -54,7 +54,16 @@ DEFAULT_HEADERS: dict[str, str] = {
 
 
 class BirdReportError(RuntimeError):
-    """Non-zero `code` in the response envelope, or a transport failure."""
+    """Non-zero `code` in the response envelope, or a transport failure.
+
+    `code` carries the server's numeric status when available so callers
+    can branch on it (notably 505/405 = anti-bot captcha challenge —
+    `BIRDREPORT_VISIT.codeHtml()` in the page JS).
+    """
+
+    def __init__(self, message: str, *, code: int | None = None) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class _LongRSA:
@@ -128,16 +137,19 @@ class BirdReportClient:
         resp = await self._http.post(f"{BASE_URL}{path}", headers=headers, content=body)
         resp.raise_for_status()
         envelope = resp.json()
-        if envelope.get("code") != 0:
+        code = envelope.get("code")
+        if code != 0:
             raise BirdReportError(
-                f"{path} -> code={envelope.get('code')} "
-                f"msg={envelope.get('msg')!r}"
+                f"{path} -> code={code} msg={envelope.get('msg')!r}",
+                code=code if isinstance(code, int) else None,
             )
 
-        encrypted = envelope.get("data")
-        if not encrypted:
-            return envelope
-        return json.loads(_aes_decrypt(encrypted))
+        data = envelope.get("data")
+        # Some endpoints encrypt `data` as base64 ciphertext, others return
+        # cleartext (list / dict) directly. Detect by type.
+        if isinstance(data, str) and data:
+            return json.loads(_aes_decrypt(data))
+        return data
 
     async def search_checklists(
         self,
@@ -161,12 +173,18 @@ class BirdReportClient:
         })
 
     async def get_observations(self, report_id: str, *, version: str = "CH4") -> list[dict]:
-        """Per-report species list. Schema reconstructed from qBird's old call
-        (page=1, limit=1500) plus the new `version` field; will need probing
-        if the modern endpoint demands something different."""
+        """Per-report species list. Schema validated 2026-06."""
         return await self.post("/front/activity/taxon", {
             "reportId": report_id,
             "version": version,
             "page": 1,
             "limit": 1500,
         })
+
+    async def get_provinces_summary(self, *, version: str = "CH4") -> list[dict]:
+        """36-province roll-up. Used to be cleartext; now requires signing too."""
+        return await self.post("/front/province/summary/chart", {"version": version})
+
+    async def get_taxon_list(self, *, version: str = "CH4") -> Any:
+        """Full bird-species catalog (~4k entries) in a single call."""
+        return await self.post("/front/taxon/search", {"version": version})

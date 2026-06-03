@@ -102,15 +102,25 @@ async def cmd_observations(skip_existing: bool, sleep_s: float) -> None:
             if skip_existing and out_path.exists():
                 skipped += 1
                 continue
-            print(f"  {rid}...")
             try:
                 data = await client.get_observations(rid)
             except BirdReportError as e:
+                # 505/405 = anti-bot captcha gate. The page JS bails out
+                # the same way; we stop and let the user resume later.
+                # Re-running with skip_existing=True picks up where we left off.
+                if e.code in (505, 405):
+                    print(
+                        f"  hit captcha gate at {rid} (code={e.code}). Stopping. "
+                        f"Wait a bit, then re-run — already-fetched files are skipped."
+                    )
+                    break
                 print(f"  fail {rid}: {e}")
                 failed += 1
                 continue
             _write_json(out_path, data)
             fetched += 1
+            n_species = len(_records_of(data))
+            print(f"  ok  {rid} ({n_species} taxa, total fetched={fetched})")
             await asyncio.sleep(sleep_s)
     print(f"observations: fetched={fetched} skipped={skipped} failed={failed}")
 
@@ -136,7 +146,9 @@ def main() -> None:
         "--refresh", action="store_true",
         help="re-fetch observations even when a file already exists",
     )
-    obs.add_argument("--sleep", type=float, default=1.0)
+    obs.add_argument("--sleep", type=float, default=2.5,
+                     help="seconds between requests (raise if you keep tripping the "
+                          "captcha gate; default 2.5s gives ~24 req/min)")
 
     args = parser.parse_args()
     if args.cmd == "checklists":
