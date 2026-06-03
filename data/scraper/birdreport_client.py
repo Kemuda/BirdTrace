@@ -136,20 +136,33 @@ class BirdReportClient:
 
         resp = await self._http.post(f"{BASE_URL}{path}", headers=headers, content=body)
         resp.raise_for_status()
-        envelope = resp.json()
+        parsed = resp.json()
+
+        # Some endpoints (e.g. /front/province/summary/chart when signed) return
+        # the payload as a bare top-level JSON array, no envelope.
+        if isinstance(parsed, list):
+            return parsed
+
+        envelope = parsed
+        # Error signals to honor:
+        #   - explicit success: false
+        #   - explicit non-zero numeric code (sign error, captcha, etc.)
+        # Endpoints like /front/taxon/search omit `code` entirely on success,
+        # so a missing/None code is NOT treated as an error.
         code = envelope.get("code")
-        if code != 0:
+        success = envelope.get("success")
+        if success is False or (isinstance(code, int) and code != 0):
             raise BirdReportError(
                 f"{path} -> code={code} msg={envelope.get('msg')!r}",
                 code=code if isinstance(code, int) else None,
             )
 
         data = envelope.get("data")
-        # Some endpoints encrypt `data` as base64 ciphertext, others return
-        # cleartext (list / dict) directly. Detect by type.
+        # Encrypted endpoints put a base64 ciphertext string in `data`;
+        # cleartext endpoints put the actual list/dict there.
         if isinstance(data, str) and data:
             return json.loads(_aes_decrypt(data))
-        return data
+        return data if data is not None else envelope
 
     async def search_checklists(
         self,
