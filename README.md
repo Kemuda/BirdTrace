@@ -51,7 +51,10 @@ python3 data/scraper/fetch_checklists.py observations
 python3 data/process/build_db.py
 python3 data/process/load_taxa.py
 python3 data/process/load_checklists.py
-python3 data/process/export_json.py --bar-chart 云南 黑颈鹤
+# 导出整个省的所有物种月度计数（推荐 —— 一次导出，前端可查任何物种）
+python3 data/process/export_json.py --province 云南
+# 或：旧的 per-(省, 物种) 模式
+# python3 data/process/export_json.py --bar-chart 云南 黑颈鹤
 
 # 5. 起前端
 cd frontend && npm run dev

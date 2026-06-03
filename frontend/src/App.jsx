@@ -13,6 +13,7 @@ export default function App() {
   const [source, setSource] = useState("mock");
   const [loading, setLoading] = useState(false);
   const [provincesStats, setProvincesStats] = useState(null);
+  const [provinceBundle, setProvinceBundle] = useState(null);
 
   // Hydrate dropdowns from static exports. Both are optional — if a file
   // hasn't been generated yet (e.g. taxon_list.json before the user runs
@@ -39,9 +40,53 @@ export default function App() {
     })();
   }, []);
 
+  // Pull in the whole-province bundle whenever the user switches province.
+  // One file holds every species' monthly counts, so subsequent species
+  // changes are instant and never re-fetch.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const resp = await fetch(`/data/province/${encodeURIComponent(province)}.json`);
+        if (!resp.ok) {
+          if (alive) setProvinceBundle(null);
+          return;
+        }
+        const bundle = await resp.json();
+        if (alive) setProvinceBundle(bundle);
+      } catch {
+        if (alive) setProvinceBundle(null);
+      }
+    })();
+    return () => { alive = false; };
+  }, [province]);
+
+  function _barFromBundle(bundle, name) {
+    const species = bundle.species.find((s) => s.name === name);
+    if (!species) return null;
+    return bundle.total_reports.map((total, i) => {
+      const m = String(i + 1).padStart(2, "0");
+      const withSp = species.monthly[i] || 0;
+      return {
+        month: m,
+        reports_with_species: withSp,
+        total_reports: total,
+        frequency_pct: total ? Math.round((withSp / total) * 1000) / 10 : 0,
+      };
+    });
+  }
+
   async function load() {
     setLoading(true);
     try {
+      if (provinceBundle) {
+        const rows = _barFromBundle(provinceBundle, taxon);
+        if (rows) {
+          setData(rows);
+          setSource("real");
+          return;
+        }
+      }
       const url = `/data/bar_chart/${encodeURIComponent(province)}__${encodeURIComponent(taxon)}.json`;
       const resp = await fetch(url);
       if (resp.ok) {
