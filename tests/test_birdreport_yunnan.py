@@ -21,7 +21,6 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from urllib.parse import urlencode
 
 import httpx
 from Crypto.Cipher import AES, PKCS1_v1_5
@@ -31,8 +30,10 @@ from Crypto.Util.Padding import unpad
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PUBLIC_KEY = REPO_ROOT / "data" / "scraper" / "public_key.pem"
 
-AES_KEY = b"C8EB5514AF5ADDB94B2207B08C66601C"
-AES_IV = b"55DD79C6F04E1A67"
+AES_KEYS = [
+    (b"3583ec0257e2f4c8195eec7410ff1619", b"d93c0d5ec6352f20"),   # SpiderChaser
+    (b"C8EB5514AF5ADDB94B2207B08C66601C", b"55DD79C6F04E1A67"),   # commonBird
+]
 
 SEARCH_URL = "https://api.birdreport.cn/front/record/activity/search"
 
@@ -56,25 +57,33 @@ class LongRSAKey:
 
 def aes_decrypt(b64_ciphertext: str) -> str:
     raw = base64.b64decode(b64_ciphertext)
-    cipher = AES.new(AES_KEY, AES.MODE_CBC, iv=AES_IV)
-    return unpad(cipher.decrypt(raw), AES.block_size).decode("utf-8")
+    last_err = None
+    for key, iv in AES_KEYS:
+        try:
+            cipher = AES.new(key, AES.MODE_CBC, iv=iv)
+            return unpad(cipher.decrypt(raw), AES.block_size).decode("utf-8")
+        except (ValueError, UnicodeDecodeError) as e:
+            last_err = e
+    raise RuntimeError(f"AES decrypt failed with all known keys: {last_err}")
 
 
 def build_headers(token: str, sign: str, request_id: str, timestamp: str) -> dict:
     headers = {
-        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept": "*/*",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+        "Connection": "keep-alive",
         "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
         "Origin": "https://www.birdreport.cn",
         "Referer": "https://www.birdreport.cn/",
         "User-Agent": (
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
             "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         ),
         "requestId": request_id,
         "sign": sign,
         "timestamp": timestamp,
     }
-    if token and os.environ.get("BR_SEND_TOKEN", "1") != "0":
+    if token and os.environ.get("BR_SEND_TOKEN", "0") == "1":
         headers["X-Auth-Token"] = token
     return headers
 
@@ -82,8 +91,7 @@ def build_headers(token: str, sign: str, request_id: str, timestamp: str) -> dic
 async def search_yunnan(token: str, start: str, end: str, page: int, limit: int):
     rsa = LongRSAKey(PUBLIC_KEY)
 
-    province = os.environ.get("BR_PROVINCE", "云南省")
-    state = os.environ.get("BR_STATE", "")
+    province = os.environ.get("BR_PROVINCE", "云南")
 
     params = {
         "page": str(page),
@@ -99,12 +107,16 @@ async def search_yunnan(token: str, start: str, end: str, page: int, limit: int)
         "serial_id": "",
         "ctime": "",
         "taxonname": "",
-        "state": state,
+        "state": "",
         "mode": "0",
         "outside_type": "0",
     }
 
-    plaintext = urlencode(params)
+    # JS front-end does: JSON.stringify(sort_ASCII(dataTojson(querystring)))
+    # = sorted-key JSON, no spaces, raw UTF-8 (no \u escapes).
+    plaintext = json.dumps(
+        params, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    )
     encrypted_body = rsa.encrypt(plaintext)
     request_id = uuid.uuid4().hex
     timestamp = str(int(time.time())) + "000"

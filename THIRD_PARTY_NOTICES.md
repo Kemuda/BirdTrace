@@ -30,6 +30,16 @@ This project's birdreport.cn API client (request signing, RSA-chunked request en
 - Repository: https://github.com/sun-jiao/birdreportcn-to-ebird
 - Cited by commonBird as additional inspiration. Listed here for completeness; we have not directly copied code from it at this time.
 
+## SpiderChaser
+
+- Repository: https://github.com/Achernar0208/SpiderChaser (`bird-report/` directory)
+- License: GPL-3.0
+- This project contains a verbatim copy of birdreport.cn's frontend JavaScript (`jQuertAjax.js`) — the original ground-truth that both qBird and commonBird were derived from. We used it as **reference material only** to recover the protocol details that other ports got wrong or never tested:
+  - The `format()` function is `JSON.stringify(sort_ASCII(dataTojson(qs)))`. The plaintext that gets signed and RSA-encrypted is **sorted-key JSON with raw UTF-8 (no escapes, no spaces)**, NOT urlencoded as we initially assumed from qBird's wrapper.
+  - The `/front/record/activity/search` endpoint is called **without** `X-Auth-Token`.
+  - AES-256-CBC parameters embedded in the JS: key `3583ec0257e2f4c8195eec7410ff1619`, iv `d93c0d5ec6352f20` (parsed as UTF-8 bytes).
+- No SpiderChaser source code (no `.js`, no `.py`) is reproduced in this repository. Protocol details and constants are facts about the third-party birdreport.cn server, not copyrightable expression — so GPL-3.0 does not propagate to our independently-written Python client. The credit here is for the reverse-engineering effort.
+
 ---
 
 The original MIT license text from TaQini is preserved verbatim below, as required by the license.
