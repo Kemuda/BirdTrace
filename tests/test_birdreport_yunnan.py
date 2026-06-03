@@ -61,7 +61,7 @@ def aes_decrypt(b64_ciphertext: str) -> str:
 
 
 def build_headers(token: str, sign: str, request_id: str, timestamp: str) -> dict:
-    return {
+    headers = {
         "Accept": "application/json, text/javascript, */*; q=0.01",
         "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
         "Origin": "https://www.birdreport.cn",
@@ -70,15 +70,20 @@ def build_headers(token: str, sign: str, request_id: str, timestamp: str) -> dic
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
             "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         ),
-        "X-Auth-Token": token,
         "requestId": request_id,
         "sign": sign,
         "timestamp": timestamp,
     }
+    if token and os.environ.get("BR_SEND_TOKEN", "1") != "0":
+        headers["X-Auth-Token"] = token
+    return headers
 
 
 async def search_yunnan(token: str, start: str, end: str, page: int, limit: int):
     rsa = LongRSAKey(PUBLIC_KEY)
+
+    province = os.environ.get("BR_PROVINCE", "云南省")
+    state = os.environ.get("BR_STATE", "")
 
     params = {
         "page": str(page),
@@ -86,7 +91,7 @@ async def search_yunnan(token: str, start: str, end: str, page: int, limit: int)
         "taxonid": "",
         "startTime": start,
         "endTime": end,
-        "province": "云南",
+        "province": province,
         "city": "",
         "district": "",
         "pointname": "",
@@ -94,7 +99,7 @@ async def search_yunnan(token: str, start: str, end: str, page: int, limit: int)
         "serial_id": "",
         "ctime": "",
         "taxonname": "",
-        "state": "",
+        "state": state,
         "mode": "0",
         "outside_type": "0",
     }
