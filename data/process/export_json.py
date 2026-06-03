@@ -19,25 +19,33 @@ ROOT = Path(__file__).resolve().parents[2]
 RAW_DIR = ROOT / "data" / "raw"
 OUT_DIR = ROOT / "frontend" / "public" / "data"
 
+# LEFT JOIN from the monthly checklist totals so months with sampling effort
+# but zero observations of the target species still report `0 / total_reports`
+# instead of being dropped to `0/0` by the species join.
 BAR_CHART_SQL = """
 WITH total AS (
     SELECT strftime('%m', start_time) AS m, COUNT(*) AS cnt
     FROM checklists
     WHERE province = :province
     GROUP BY m
+),
+species AS (
+    SELECT strftime('%m', c.start_time) AS m,
+           COUNT(DISTINCT c.report_id)  AS cnt
+    FROM checklists c
+    JOIN observations o ON c.report_id = o.report_id
+    WHERE c.province = :province
+      AND o.taxon_name = :taxon
+    GROUP BY m
 )
 SELECT
-    strftime('%m', c.start_time)             AS month,
-    COUNT(DISTINCT c.report_id)              AS reports_with_species,
-    total.cnt                                AS total_reports,
-    ROUND(100.0 * COUNT(DISTINCT c.report_id) / total.cnt, 1) AS frequency_pct
-FROM checklists c
-JOIN observations o ON c.report_id = o.report_id
-JOIN total          ON total.m   = strftime('%m', c.start_time)
-WHERE c.province = :province
-  AND o.taxon_name = :taxon
-GROUP BY month
-ORDER BY month;
+    total.m                                                   AS month,
+    COALESCE(species.cnt, 0)                                  AS reports_with_species,
+    total.cnt                                                 AS total_reports,
+    ROUND(100.0 * COALESCE(species.cnt, 0) / total.cnt, 1)    AS frequency_pct
+FROM total
+LEFT JOIN species ON species.m = total.m
+ORDER BY total.m;
 """
 
 

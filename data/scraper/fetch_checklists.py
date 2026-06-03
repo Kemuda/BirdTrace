@@ -6,15 +6,21 @@ hit the API from the page context, and let the site's JS decrypt the
 response before we read it back. The encryption keys never leave the
 browser; we just observe the post-decryption data.
 
-Two flows are supported:
+Three subcommands:
 
-  --login      Open a real browser, let the user sign in by hand, then
-               persist cookies/localStorage to AUTH_STATE so subsequent
-               runs can skip the login step.
+  login           Open a real browser, let the user sign in by hand, then
+                  persist cookies/localStorage to AUTH_STATE so subsequent
+                  runs can skip the login step.
 
-  (default)    Headless run using the saved AUTH_STATE. Iterates over the
-               requested (province, page) targets and saves the decrypted
-               JSON to data/raw/checklists/<province>/<page>.json.
+  fetch           Headless run using the saved AUTH_STATE. Iterates over
+                  checklist pages for a province and saves each decrypted
+                  response to data/raw/checklists/<province>/<page>.json.
+
+  observations    Walks the saved checklist pages, extracts every report_id,
+                  and calls /front/activity/taxon for each one. Saves the
+                  decrypted observation list to
+                  data/raw/observations/<report_id>.json. This is the
+                  per-report species list the bar chart query needs.
 
 The exact in-page selector / function used to call the API is intentionally
 left as a TODO — it depends on the live site structure and needs to be
@@ -28,9 +34,10 @@ import argparse
 import asyncio
 import json
 from pathlib import Path
+from typing import Any, Iterable
 
 try:
-    from playwright.async_api import async_playwright
+    from playwright.async_api import Page, async_playwright
 except ImportError as e:  # pragma: no cover - import guard
     raise SystemExit(
         "playwright not installed. Run:\n"
@@ -40,7 +47,8 @@ except ImportError as e:  # pragma: no cover - import guard
 
 ROOT = Path(__file__).resolve().parents[1]
 AUTH_STATE = ROOT / "raw" / "auth_state.json"
-OUT_ROOT = ROOT / "raw" / "checklists"
+CHECKLISTS_DIR = ROOT / "raw" / "checklists"
+OBSERVATIONS_DIR = ROOT / "raw" / "observations"
 SITE_URL = "https://www.birdreport.cn/"
 
 # TODO(verify-in-devtools): replace the stub below once the page's request
@@ -58,6 +66,10 @@ async ({ path, body }) => {
 """
 
 
+async def call_api(page: Page, path: str, body: dict[str, Any]) -> Any:
+    return await page.evaluate(CALL_API_JS, {"path": path, "body": body})
+
+
 async def cmd_login(headless: bool = False) -> None:
     AUTH_STATE.parent.mkdir(parents=True, exist_ok=True)
     async with async_playwright() as p:
@@ -72,40 +84,93 @@ async def cmd_login(headless: bool = False) -> None:
         await browser.close()
 
 
-async def fetch_page(province: str, page_num: int, start: str, end: str) -> dict | None:
+def _require_auth() -> None:
     if not AUTH_STATE.exists():
-        raise SystemExit(f"{AUTH_STATE} missing — run with --login first")
+        raise SystemExit(f"{AUTH_STATE} missing — run with `login` first")
+
+
+async def cmd_fetch(province: str, start: str, end: str, max_pages: int) -> None:
+    _require_auth()
+    out_dir = CHECKLISTS_DIR / province
+    out_dir.mkdir(parents=True, exist_ok=True)
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(storage_state=str(AUTH_STATE))
         page = await context.new_page()
         await page.goto(SITE_URL)
-        body = {
-            "province": province,
-            "startTime": start,
-            "endTime": end,
-            "page": page_num,
-            "limit": 100,
-        }
-        result = await page.evaluate(
-            CALL_API_JS, {"path": "/front/record/activity/search", "body": body}
-        )
-        await browser.close()
-        return result
+        try:
+            for page_num in range(1, max_pages + 1):
+                print(f"  {province} page {page_num}...")
+                body = {
+                    "province": province,
+                    "startTime": start,
+                    "endTime": end,
+                    "page": page_num,
+                    "limit": 100,
+                }
+                data = await call_api(page, "/front/record/activity/search", body)
+                if not data or not _records_of(data):
+                    print(f"  done at page {page_num} (empty response)")
+                    break
+                out_path = out_dir / f"{page_num:04d}.json"
+                out_path.write_text(
+                    json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+                await asyncio.sleep(1.5)
+        finally:
+            await browser.close()
 
 
-async def cmd_fetch(province: str, start: str, end: str, max_pages: int) -> None:
-    out_dir = OUT_ROOT / province
-    out_dir.mkdir(parents=True, exist_ok=True)
-    for page_num in range(1, max_pages + 1):
-        print(f"  {province} page {page_num}...")
-        data = await fetch_page(province, page_num, start, end)
-        if not data or not data.get("data"):
-            print(f"  done at page {page_num} (empty response)")
-            break
-        out_path = out_dir / f"{page_num:04d}.json"
-        out_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        await asyncio.sleep(1.5)
+def _records_of(payload: Any) -> list[dict]:
+    """Tolerate either `[...]` or `{"data": [...]}` shapes from the decrypted JSON."""
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        inner = payload.get("data")
+        if isinstance(inner, list):
+            return inner
+    return []
+
+
+def _iter_report_ids() -> Iterable[str]:
+    seen: set[str] = set()
+    for path in sorted(CHECKLISTS_DIR.rglob("*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"  skip {path}: {e}")
+            continue
+        for rec in _records_of(payload):
+            rid = rec.get("reportId") or rec.get("report_id")
+            if rid and rid not in seen:
+                seen.add(rid)
+                yield rid
+
+
+async def cmd_observations(skip_existing: bool) -> None:
+    _require_auth()
+    OBSERVATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context(storage_state=str(AUTH_STATE))
+        page = await context.new_page()
+        await page.goto(SITE_URL)
+        try:
+            for rid in _iter_report_ids():
+                out_path = OBSERVATIONS_DIR / f"{rid}.json"
+                if skip_existing and out_path.exists():
+                    continue
+                print(f"  {rid}...")
+                data = await call_api(page, "/front/activity/taxon", {"reportId": rid})
+                if not data:
+                    print(f"  empty for {rid}, skipping")
+                    continue
+                out_path.write_text(
+                    json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+                await asyncio.sleep(1.0)
+        finally:
+            await browser.close()
 
 
 def main() -> None:
@@ -120,11 +185,22 @@ def main() -> None:
     fetch.add_argument("--end", default="2024-12-31")
     fetch.add_argument("--max-pages", type=int, default=200)
 
+    obs = sub.add_parser(
+        "observations",
+        help="fetch per-report species lists for every saved checklist",
+    )
+    obs.add_argument(
+        "--refresh", action="store_true",
+        help="re-fetch observations even if a file already exists",
+    )
+
     args = parser.parse_args()
     if args.cmd == "login":
         asyncio.run(cmd_login())
     elif args.cmd == "fetch":
         asyncio.run(cmd_fetch(args.province, args.start, args.end, args.max_pages))
+    elif args.cmd == "observations":
+        asyncio.run(cmd_observations(skip_existing=not args.refresh))
 
 
 if __name__ == "__main__":
