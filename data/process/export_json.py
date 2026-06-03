@@ -61,6 +61,21 @@ def export_provinces_summary() -> Path:
     return dst
 
 
+def export_taxon_list() -> Path | None:
+    """Pass through the species catalog for the frontend autocomplete.
+
+    Optional — returns None if no source exists, so a partially-set-up
+    repo can still produce the provinces export.
+    """
+    src = RAW_DIR / "taxon_list.json"
+    if not src.exists():
+        return None
+    dst = OUT_DIR / "taxon_list.json"
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, dst)
+    return dst
+
+
 def bar_chart(conn: sqlite3.Connection, province: str, taxon: str) -> list[dict]:
     rows = conn.execute(
         BAR_CHART_SQL, {"province": province, "taxon": taxon}
@@ -87,14 +102,83 @@ def export_bar_chart(province: str, taxon: str) -> Path:
     return dst
 
 
+PROVINCE_BUNDLE_SQL_TOTALS = """
+SELECT strftime('%m', start_time) AS m, COUNT(*) AS cnt
+FROM checklists WHERE province = :province GROUP BY m
+"""
+
+PROVINCE_BUNDLE_SQL_SPECIES = """
+SELECT o.taxon_name,
+       o.latin_name,
+       strftime('%m', c.start_time)      AS m,
+       COUNT(DISTINCT c.report_id)        AS cnt
+FROM checklists c
+JOIN observations o ON c.report_id = o.report_id
+WHERE c.province = :province AND o.taxon_name IS NOT NULL
+GROUP BY o.taxon_name, m
+"""
+
+
+def province_bundle(conn: sqlite3.Connection, province: str) -> dict:
+    """Return every species' month-by-month report count for a province.
+
+    The frontend computes `frequency_pct = species[i].monthly[m] /
+    total_reports[m] * 100` on the fly. One file per province scales much
+    better than one per (province, species) pair, and lets the UI
+    autocomplete + chart any species without re-fetching.
+    """
+    months = [f"{m:02d}" for m in range(1, 13)]
+    totals_by_month = {
+        m: cnt for m, cnt in
+        conn.execute(PROVINCE_BUNDLE_SQL_TOTALS, {"province": province})
+    }
+    species_acc: dict[str, dict] = {}
+    for taxon, latin, m, cnt in conn.execute(
+        PROVINCE_BUNDLE_SQL_SPECIES, {"province": province}
+    ):
+        entry = species_acc.setdefault(
+            taxon, {"name": taxon, "latin_name": latin, "monthly": {x: 0 for x in months}}
+        )
+        entry["monthly"][m] = cnt
+
+    return {
+        "province": province,
+        "total_reports": [totals_by_month.get(m, 0) for m in months],
+        "species": [
+            {
+                "name": e["name"],
+                "latin_name": e["latin_name"],
+                "monthly": [e["monthly"][m] for m in months],
+            }
+            for e in sorted(species_acc.values(), key=lambda x: x["name"])
+        ],
+    }
+
+
+def export_province_bundle(province: str) -> Path:
+    with connect() as conn:
+        bundle = province_bundle(conn, province)
+    dst = OUT_DIR / "province" / f"{province}.json"
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_text(json.dumps(bundle, ensure_ascii=False, indent=2), encoding="utf-8")
+    return dst
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bar-chart", nargs=2, metavar=("PROVINCE", "TAXON"),
-                        help="export bar chart JSON for one (province, taxon) pair")
+                        help="export single-pair bar chart JSON (legacy shape)")
+    parser.add_argument("--province", metavar="PROVINCE",
+                        help="export the whole-province species bundle (preferred — "
+                             "lets the frontend chart any species without re-export)")
     args = parser.parse_args()
 
     out = export_provinces_summary()
     print(f"wrote {out}")
+
+    taxon_out = export_taxon_list()
+    if taxon_out:
+        print(f"wrote {taxon_out}")
 
     if args.bar_chart:
         province, taxon = args.bar_chart
@@ -102,6 +186,13 @@ def main() -> None:
             print(f"skipping bar chart: {DB_PATH} not built yet")
             return
         out = export_bar_chart(province, taxon)
+        print(f"wrote {out}")
+
+    if args.province:
+        if not DB_PATH.exists():
+            print(f"skipping province bundle: {DB_PATH} not built yet")
+            return
+        out = export_province_bundle(args.province)
         print(f"wrote {out}")
 
 

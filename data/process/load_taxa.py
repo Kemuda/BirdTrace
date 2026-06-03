@@ -1,4 +1,10 @@
-"""Load data/raw/taxa.json into the `taxa` table."""
+"""Load scraped taxonomy into the `taxa` table.
+
+Prefers data/raw/taxon_list.json (one-shot dump from
+fetch_taxon_list.py), falls back to data/raw/taxa.json (the slower
+per-ID iterator from fetch_taxa.py). Both come from the same backend
+and share at least the id/name/latinname fields.
+"""
 from __future__ import annotations
 
 import json
@@ -6,7 +12,8 @@ from pathlib import Path
 
 from build_db import connect
 
-SRC = Path(__file__).resolve().parents[1] / "raw" / "taxa.json"
+RAW_DIR = Path(__file__).resolve().parents[1] / "raw"
+SRC_CANDIDATES = [RAW_DIR / "taxon_list.json", RAW_DIR / "taxa.json"]
 
 # Map birdreport field names to our schema columns.
 COLUMN_MAP = {
@@ -20,9 +27,14 @@ COLUMN_MAP = {
 
 
 def main() -> None:
-    if not SRC.exists():
-        raise FileNotFoundError(f"{SRC} missing — run data/scraper/fetch_taxa.py first")
-    rows = json.loads(SRC.read_text(encoding="utf-8"))
+    src = next((p for p in SRC_CANDIDATES if p.exists()), None)
+    if src is None:
+        raise FileNotFoundError(
+            f"None of {[str(p) for p in SRC_CANDIDATES]} exist — "
+            "run data/scraper/fetch_taxon_list.py (preferred) or fetch_taxa.py first"
+        )
+    rows = json.loads(src.read_text(encoding="utf-8"))
+    print(f"loading taxa from {src}")
     cols = list(COLUMN_MAP.keys())
     placeholders = ",".join(["?"] * len(cols))
     insert_sql = f"INSERT OR REPLACE INTO taxa ({','.join(cols)}) VALUES ({placeholders})"

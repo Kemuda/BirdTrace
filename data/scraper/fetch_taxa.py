@@ -4,6 +4,9 @@ Walks a range of integer taxon IDs, requests each, and saves successful
 responses as a single JSON array. Per PRD §采集策略 this is rate-limited
 (1-2s between requests) to be polite to the upstream.
 
+The endpoint is unsigned but the front gate WAFs requests without
+browser-shaped headers; we send the same headers the real frontend uses.
+
 Usage:
     python data/scraper/fetch_taxa.py --start 4000 --end 4200
 """
@@ -19,13 +22,22 @@ import requests
 API_URL = "https://api.birdreport.cn/front/taxon/get"
 OUT_PATH = Path(__file__).resolve().parents[1] / "raw" / "taxa.json"
 
+HEADERS = {
+    "Accept": "*/*",
+    "Accept-Language": "zh-CN,zh;q=0.9",
+    "Content-Type": "application/json",
+    "Origin": "https://www.birdreport.cn",
+    "Referer": "https://www.birdreport.cn/",
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    ),
+}
+
 
 def fetch_one(taxon_id: int, session: requests.Session) -> dict | None:
     resp = session.post(
-        API_URL,
-        json={"id": taxon_id},
-        headers={"Content-Type": "application/json"},
-        timeout=15,
+        API_URL, json={"id": taxon_id}, headers=HEADERS, timeout=15
     )
     resp.raise_for_status()
     body = resp.json()

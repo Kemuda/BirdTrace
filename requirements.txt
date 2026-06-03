@@ -1,2 +1,3 @@
+httpx<1
+pycryptodome<4
 requests>=2.31
-playwright>=1.48

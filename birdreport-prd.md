@@ -3,7 +3,7 @@
 **项目代号：** birdreport-explorer  
 **作者：** AK  
 **状态：** Passion project / 个人实验  
-**最后更新：** 2026-06-03
+**最后更新：** 2026-06-03（v2: 数据层完成逆向）
 
 ---
 
@@ -40,57 +40,88 @@ eBird（Cornell Lab）是对标对象。它的核心价值不只是数据采集�
 
 **Base URL：** `https://api.birdreport.cn/front/`
 
-**认证机制：**  
-所有请求需注入三个 Header：
-- `timestamp`：Unix 毫秒时间戳
-- `requestId`：随机 UUID
-- `sign`：动态签名（与页面 JS 中 AES key/iv 相关，尚未完全逆向）
+**认证机制（已完全逆向）：**  
+所有 `/front/*` 加密接口需注入三个 Header：
+- `timestamp`：Unix 毫秒时间戳（`str(int(time.time())) + "000"`）
+- `requestId`：随机 UUID hex（32 字符无连字符）
+- `sign`：`md5(plaintext + requestId + timestamp)`
+
+**X-Auth-Token 不要传**——`/front/*` 接口不需要也不接受用户态 token；带上反而可能被业务层挡。token 只在 `/member/*` 接口路径上用，那条路径走的是登录用户自己的数据。
+
+**前置 WAF：** 无签名的明文接口（`/front/province/summary/chart`、`/front/taxon/get`、`/front/taxon/search`）也会校验 `Origin`/`Referer`/`User-Agent` 看是否像浏览器；不像就返回 403 "Bad request, the server has rejected it!"。
 
 **响应格式两种：**
-- 明文 JSON（统计类接口，直接用）
-- 加密 JSON：`{"code":0, "count":N, "data":"BASE64_AES_ENCRYPTED"}` — 用页面 JS 全局变量 `BIRDREPORT_APIJS` 中的 key/iv 解密（AES-CBC）
+- **明文 JSON**：cleartext 接口直接返回 `{code, count, data: [...] | {...}, msg}`
+- **加密 JSON**：`{"code":0, "count":N, "data":"BASE64_AES_CIPHERTEXT"}`——`data` 是 AES-256-CBC base64，密钥/IV 嵌在前端 JS 里（见下）
 
-### 关键接口
+### 密码学细节
 
-#### 明文接口（无需签名，直接调）
+**请求体加密：** RSA-1024 PKCS1_v1_5，对**明文按 117 字节切块**逐块加密、密文拼接后 base64。公钥见 `data/scraper/public_key.pem`。
+
+**明文格式：** **sorted-key JSON，原生 UTF-8（不要 `\uXXXX` 转义），无空格。** 等价 Python：
+```python
+json.dumps(params, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+```
+前端 JS 实际链路是 `JSON.stringify(sort_ASCII(dataTojson(querystring)))`——把 urlencoded 字符串 split 成对象、按 key ASCII 排序、再 stringify。我们直接给 dict 起 sorted JSON 等价。
+
+**响应解密：** AES-256-CBC + PKCS7 padding。密钥和 IV 是 ASCII hex 字符串，**当 UTF-8 字节用**：
+- 现役：key `3583ec0257e2f4c8195eec7410ff1619`，iv `d93c0d5ec6352f20`（来自 SpiderChaser 抓的 `jQuertAjax.js`，2026-06 实测仍有效）
+- 备用：key `C8EB5514AF5ADDB94B2207B08C66601C`，iv `55DD79C6F04E1A67`（commonBird 那一版，可能是不同生代留下的）
+- 客户端 `birdreport_client.py` 两套都试，谁能 PKCS7 unpad 成功就用谁
+
+### 关键接口（schema 全部以 2026-06 现役为准）
+
+#### 明文接口（无需签名，但仍要带浏览器 Header）
 
 ```
 POST /front/province/summary/chart
 Body: {"version": "CH4"}
-返回: [{name, value(鸟种数), report(报告数), record(记录条数), ...}] × 36省
-```
-
-```
-POST /front/system/adcode/province    # 省级列表
-POST /front/system/adcode/city        # 城市列表，参数: province_code
-POST /front/system/adcode/district    # 区县列表，参数: city_code
+返回: [{name, value(鸟种数), report(报告数), record(记录条数), ...}] × 36 省
 ```
 
 ```
 POST /front/taxon/get
 Body: {"id": 4001}
-返回: 物种详情（明文，无需签名）
+返回: {code, data: {id, name, latinname, englishname, ...}}
+```
+
+```
+POST /front/taxon/search
+Body: (空 body)
+返回: {code, count, data: [{id, name, szm, pinyin, ...}, ...]}
+说明: 一次性返回完整鸟种名录（~4000+ 条），用于 autocomplete
 ```
 
 #### 加密接口（需签名 + 解密）
 
 ```
 POST /front/record/activity/search
-关键参数:
-  province    省名（如"云南"）
-  taxon_id    物种ID（过滤含特定物种的报告）
-  startTime   "2024-01-01"
-  endTime     "2024-12-31"
-  page        页码（从1开始）
-  limit       每页数量（最大100）
-返回: 加密，解密后为 Checklist 列表
+Body 字段（**只有 6 个，多余字段会让业务层 NPE**）:
+  province    省名（如 "云南"，**不带 省/市 后缀**）
+  startTime   "" 或 "YYYY-MM-DD"
+  endTime     "" 或 "YYYY-MM-DD"
+  version     "CH4"   ← 关键字段，漏传 = 业务层"系统出错"
+  page        页码（从 1 开始）
+  limit       每页数量（前端 UI 提供 20 / 50；100 未验证）
+返回: 解密后为 Checklist 列表（list of dict）
 ```
 
 ```
 POST /front/activity/taxon
-Body: {"reportId": "UUID"}
-返回: 加密，解密后为该报告的物种观测列表
+Body: {"reportId": "UUID", "version": "CH4", "page": 1, "limit": 1500}
+返回: 解密后为该报告的物种观测列表
+（注：schema 推断自 qBird + 新版 version 字段，尚需第一次运行验证）
 ```
+
+### 历史踩坑（避免后人重复）
+
+旧资料（qBird 2023、commonBird 2025、SpiderChaser ~2023）里 `/front/record/activity/search` 的请求体都是 16 个字段（`page, limit, taxonid, startTime, endTime, province, city, district, pointname, username, serial_id, ctime, taxonname, state, mode, outside_type`）。**这个 schema 在 2026-06 已过期**：
+- 服务端会拒绝（业务层"系统出错"，不会告诉你为什么）
+- 关键变化是新增 `version` 字段、删除大部分过滤字段
+- commonBird 里的 `/front/*` codepath 因 async/sync 误用是 dead code，CKRainbow 自己也没跑过，不能当 ground truth
+- qBird 的实际加密逻辑在外部 JS 文件（`jQuertAjax.js`），仓库本身没有
+
+正确 schema 是从 https://www.birdreport.cn/home/search/report.html?search=... 的页面源码 + URL base64 参数反推出来的（layui table 的 `where`）。任何时候 schema 又变，回去看这个页面的 HTML 是最快的路径。
 
 ### 数据结构
 
@@ -111,21 +142,21 @@ taxon_count, record_image_num
 
 ### 采集策略
 
-**阶段一（MVP）：只用明文接口**
-- `province/summary/chart` → 36省基础统计，直接调，无障碍
-- 足够做省级概览 + 初步 Bar Chart 原型
+**阶段一（MVP）：明文接口** ✅ 已实现
+- `province/summary/chart` 给 36 省概览
+- `taxon/search` 给完整鸟种名录（autocomplete 用）
 
-**阶段二（完整数据）：Playwright 方案**
-- 用 Playwright 登录，在浏览器上下文中调 API
-- 拦截 XHR 响应，数据抵达时已由页面 JS 解密，直接拿明文
-- 签名和解密都交给页面自己处理，无需逆向
+**阶段二（完整数据）：直连加密接口** ✅ 已实现（替代了 PRD v1 的 Playwright 方案）
+- `birdreport_client.BirdReportClient`：纯 Python httpx + pycryptodome，无浏览器依赖
+- `data/scraper/fetch_checklists.py checklists --province 云南` 跑通后端到端
+- 每页一个 JSON 文件存到 `data/raw/checklists/<province>/<page>.json`
+- 默认 1.5 秒/页节流，可配
 
-**阶段三（可选）：纯 Python 复现**
-- 完全逆向签名算法 + 自己做 AES 解密
-- 性能更好，适合大规模批量采集
-- 当前优先级低
+**阶段三（可选）：性能优化**
+- 当前实现是 sequential async，单进程；如果要全量抓 36 省 × N 万 checklist 可以加并发
+- 但要小心 birdreport 那边的 rate limit / WAF
 
-**采集频率控制：** 每次请求间隔 1-2s，按省份分批，避免对服务器造成压力。
+**采集频率控制：** 默认 1.5 秒/页（checklist 翻页）、1.0 秒/份报告（observation）。修改 `--sleep` 调整。
 
 ---
 
@@ -298,11 +329,13 @@ print(json.dumps(data[:3], ensure_ascii=False, indent=2))
 
 | 问题 | 状态 | 解决方向 |
 |------|------|---------|
-| `sign` header 未完全逆向 | 待解决 | Playwright 绕过，或继续逆向 JS |
-| `taxon/search` 依赖 session | 待验证 | 带登录态的 Playwright 再测 |
-| 物种分布地图接口未找到 | 待解决 | Playwright 点击触发后拦截 XHR |
-| 经纬度字段在 Checklist 中不确定 | 待确认 | 抓几条详情数据后检查 |
-| 数据量估算 | 未知 | 先抓云南一省，看报告总量再决定全量策略 |
+| `sign` header 逆向 | ✅ 完成 | `md5(plaintext + requestId + timestamp)` |
+| `/front/record/activity/search` schema | ✅ 完成 | 6 字段含 `version: "CH4"` |
+| AES key/iv | ✅ 完成 | 见 `birdreport_client.AES_KEYS` |
+| `/front/activity/taxon` schema | ⚠️ 推断 | 第一次跑 observations 命令时验证 |
+| 经纬度字段 | ⚠️ 部分 | checklist 列表里只有 point_name；lat/lng 可能要从单报告详情接口拿 |
+| 数据量估算 | 部分 | 云南实测 69852 份历史 checklist；按 50/页 = 1397 页，2s/页 ≈ 47 分钟全量 |
+| Hotspot 系统 | ✅ 走 eBird 数据 | 复用 `database/ebird_cn_hotspots.json`（6217 个中国热点带经纬度） |
 
 ---
 
@@ -312,4 +345,16 @@ print(json.dumps(data[:3], ensure_ascii=False, indent=2))
 - 高德地图 JS API：https://lbs.amap.com/api/javascript-api/summary
 - recharts 文档：https://recharts.org
 - pycryptodome：https://pycryptodome.readthedocs.io
-- Playwright Python：https://playwright.dev/python
+
+## 致谢 / 上游
+
+数据层的逆向工作是在以下几个开源项目的基础上完成的，详情见 `THIRD_PARTY_NOTICES.md`：
+
+- **qBird** (https://github.com/TaQini/qBird, MIT, 2023, TaQini)
+  原 sign 算法、请求流程、参数 shape。
+- **commonBird** (https://github.com/CKRainbow/commonBird, MIT, 2025, CKRainbow)
+  纯 Python RSA chunked 加密实现、备用 AES key/iv、eBird CN Hotspot 数据库（6217 点）、跨平台分类映射表。
+- **SpiderChaser** (https://github.com/Achernar0208/SpiderChaser, GPL-3.0)
+  含 birdreport.cn 前端 JS 原文（`jQuertAjax.js`）——是恢复**当前** wire format 和现役 AES key/iv 的关键资料。
+- **birdreportcn-to-ebird** (https://github.com/sun-jiao/birdreportcn-to-ebird)
+  commonBird 的二级灵感来源。
