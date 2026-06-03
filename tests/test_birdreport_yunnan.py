@@ -92,33 +92,20 @@ async def search_yunnan(token: str, start: str, end: str, page: int, limit: int)
     rsa = LongRSAKey(PUBLIC_KEY)
 
     province = os.environ.get("BR_PROVINCE", "云南")
-    city = os.environ.get("BR_CITY", "")
-    # SpiderChaser's working call sends empty dates. Opt-in via BR_USE_DATES=1.
-    if os.environ.get("BR_USE_DATES", "0") != "1":
-        start = ""
-        end = ""
-
+    # Schema recovered from birdreport.cn's report.html page (the layui table
+    # that lists province checklists). The base64-encoded `search` query
+    # param decodes to exactly these four fields, plus page/limit added by
+    # layui's pagination. The 16-field qBird/SpiderChaser shape is stale —
+    # missing `version` was what server-NPE'd our previous tries.
     params = {
-        "page": str(page),
-        "limit": str(limit),
-        "taxonid": "",
+        "province": province,
         "startTime": start,
         "endTime": end,
-        "province": province,
-        "city": city,
-        "district": "",
-        "pointname": "",
-        "username": "",
-        "serial_id": "",
-        "ctime": "",
-        "taxonname": "",
-        "state": "",
-        "mode": "0",
-        "outside_type": "0",
+        "version": "CH4",
+        "page": page,
+        "limit": limit,
     }
 
-    # JS front-end does: JSON.stringify(sort_ASCII(dataTojson(querystring)))
-    # = sorted-key JSON, no spaces, raw UTF-8 (no \u escapes).
     plaintext = json.dumps(
         params, ensure_ascii=False, separators=(",", ":"), sort_keys=True
     )
@@ -154,9 +141,13 @@ async def main():
 
     end = time.strftime("%Y-%m-%d")
     start = time.strftime("%Y-%m-%d", time.localtime(time.time() - 30 * 86400))
-    print(f"Fetching Yunnan checklists, {start} -> {end}, page=1, limit=10")
+    # New schema accepts empty dates; only set them via env if you want to test.
+    if os.environ.get("BR_USE_DATES", "0") != "1":
+        start = ""
+        end = ""
+    print(f"Fetching Yunnan checklists, start={start!r} end={end!r}, page=1, limit=20")
 
-    records = await search_yunnan(token, start, end, page=1, limit=100)
+    records = await search_yunnan(token, start, end, page=1, limit=20)
 
     print(f"Got {len(records)} checklists.")
     if records:
