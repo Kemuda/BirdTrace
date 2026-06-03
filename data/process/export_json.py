@@ -49,12 +49,16 @@ ORDER BY total.m;
 """
 
 
-def export_provinces_summary() -> Path:
+def export_provinces_summary() -> Path | None:
+    """Pass through the cleartext provinces summary.
+
+    Optional — returns None if no source exists (e.g. fetch_provinces.py
+    hasn't run / can't reach the API), so the offline DB-backed exports
+    (--province, --bar-chart) still work.
+    """
     src = RAW_DIR / "provinces_summary.json"
     if not src.exists():
-        raise FileNotFoundError(
-            f"{src} missing — run data/scraper/fetch_provinces.py first"
-        )
+        return None
     dst = OUT_DIR / "provinces_summary.json"
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(src, dst)
@@ -174,7 +178,10 @@ def main() -> None:
     args = parser.parse_args()
 
     out = export_provinces_summary()
-    print(f"wrote {out}")
+    if out:
+        print(f"wrote {out}")
+    else:
+        print("skipping provinces_summary.json (run fetch_provinces.py to add it)")
 
     taxon_out = export_taxon_list()
     if taxon_out:

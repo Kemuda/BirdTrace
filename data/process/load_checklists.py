@@ -55,6 +55,23 @@ def _first(d: dict, *keys: str) -> Any:
     return None
 
 
+# The backend returns full administrative names ("云南省", "西藏自治区"), but the
+# frontend dropdown + provinces_summary use short names ("云南", "西藏"). Normalize
+# at load time so DB province values join cleanly across both.
+_PROVINCE_SUFFIXES = ("省", "自治区", "壮族自治区", "回族自治区", "维吾尔自治区", "市")
+
+
+def _normalize_province(name: Any) -> Any:
+    if not isinstance(name, str):
+        return name
+    s = name.strip()
+    # 内蒙古自治区 -> 内蒙古, 广西壮族自治区 -> 广西, etc. Strip the longest matching suffix.
+    for suffix in sorted(_PROVINCE_SUFFIXES, key=len, reverse=True):
+        if s.endswith(suffix) and len(s) > len(suffix):
+            return s[: -len(suffix)]
+    return s
+
+
 def _iter_json(root: Path) -> Iterable[tuple[Path, Any]]:
     if not root.exists():
         return
@@ -76,7 +93,7 @@ def load_checklists(conn: sqlite3.Connection) -> int:
                 report_id,
                 _first(rec, "serial_id", "serialId"),
                 _first(rec, "start_time", "startTime"),
-                _first(rec, "province_name", "province"),
+                _normalize_province(_first(rec, "province_name", "province")),
                 _first(rec, "city_name", "city"),
                 _first(rec, "district_name", "district"),
                 _first(rec, "point_name", "pointName"),
