@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# BirdTrace local data artifacts
+data/raw/
+data/db/
+frontend/public/data/
