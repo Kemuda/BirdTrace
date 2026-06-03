@@ -92,6 +92,10 @@ async def search_yunnan(token: str, start: str, end: str, page: int, limit: int)
     rsa = LongRSAKey(PUBLIC_KEY)
 
     province = os.environ.get("BR_PROVINCE", "云南")
+    # SpiderChaser's working call sends empty dates. Opt-in via BR_USE_DATES=1.
+    if os.environ.get("BR_USE_DATES", "0") != "1":
+        start = ""
+        end = ""
 
     params = {
         "page": str(page),
