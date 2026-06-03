@@ -115,8 +115,23 @@ def main() -> None:
         o = load_observations(conn)
         total_c = conn.execute("SELECT COUNT(*) FROM checklists").fetchone()[0]
         total_o = conn.execute("SELECT COUNT(*) FROM observations").fetchone()[0]
+        # Surface what's actually in the DB so the user knows what species
+        # to chart without guessing. Most-reported first; report_count is
+        # the distinct-checklist count (= numerator of frequency_pct).
+        top_species = conn.execute("""
+            SELECT taxon_name, COUNT(DISTINCT report_id) AS report_count
+            FROM observations
+            WHERE taxon_name IS NOT NULL
+            GROUP BY taxon_name
+            ORDER BY report_count DESC
+            LIMIT 10
+        """).fetchall()
     print(f"loaded {c} checklist rows (table now has {total_c})")
     print(f"loaded {o} observation rows (table now has {total_o})")
+    if top_species:
+        print("\nTop 10 species by report count (try these in the frontend):")
+        for name, cnt in top_species:
+            print(f"  {cnt:>4}  {name}")
 
 
 if __name__ == "__main__":
