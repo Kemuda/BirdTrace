@@ -146,9 +146,9 @@ async def search_yunnan(token: str, start: str, end: str, page: int, limit: int)
 
 
 async def main():
-    token = os.environ.get("BIRDREPORT_TOKEN")
-    if not token:
-        print("ERROR: set BIRDREPORT_TOKEN env var (X-Auth-Token from DevTools).")
+    token = os.environ.get("BIRDREPORT_TOKEN", "")
+    if not token and os.environ.get("BR_SEND_TOKEN", "0") == "1":
+        print("ERROR: BR_SEND_TOKEN=1 requires BIRDREPORT_TOKEN.")
         sys.exit(2)
 
     end = time.strftime("%Y-%m-%d")
