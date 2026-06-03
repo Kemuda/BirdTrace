@@ -104,8 +104,13 @@ async def search_yunnan(token: str, start: str, end: str, page: int, limit: int)
     sign = hashlib.md5((plaintext + request_id + timestamp).encode()).hexdigest()
     headers = build_headers(token, sign, request_id, timestamp)
 
+    print(f"DEBUG plaintext ({len(plaintext)} chars): {plaintext}")
+    print(f"DEBUG encrypted body len: {len(encrypted_body)}")
+    print(f"DEBUG sign: {sign}")
+    print(f"DEBUG timestamp: {timestamp}, requestId: {request_id}")
+
     async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(SEARCH_URL, headers=headers, data=encrypted_body)
+        resp = await client.post(SEARCH_URL, headers=headers, content=encrypted_body)
 
     resp.raise_for_status()
     envelope = resp.json()
