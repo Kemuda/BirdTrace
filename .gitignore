@@ -220,4 +220,5 @@ __marimo__/
 # BirdTrace local data artifacts
 data/raw/
 data/db/
+data/scraper/*_sample.json
 frontend/public/data/
