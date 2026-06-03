@@ -21,6 +21,7 @@ import sys
 import time
 import uuid
 from pathlib import Path
+from urllib.parse import urlencode
 
 import httpx
 from Crypto.Cipher import AES, PKCS1_v1_5
@@ -92,12 +93,13 @@ async def search_yunnan(token: str, start: str, end: str, page: int, limit: int)
         "username": "",
         "serial_id": "",
         "ctime": "",
+        "taxonname": "",
         "state": "",
         "mode": "0",
-        "outside_type": "",
+        "outside_type": "0",
     }
 
-    plaintext = json.dumps(params).replace(" ", "")
+    plaintext = urlencode(params)
     encrypted_body = rsa.encrypt(plaintext)
     request_id = uuid.uuid4().hex
     timestamp = str(int(time.time())) + "000"
