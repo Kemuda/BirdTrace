@@ -126,7 +126,7 @@ def main() -> None:
     chk.add_argument("--start", default="")
     chk.add_argument("--end", default="")
     chk.add_argument("--max-pages", type=int, default=200)
-    chk.add_argument("--limit", type=int, default=100)
+    chk.add_argument("--limit", type=int, default=50)
     chk.add_argument("--sleep", type=float, default=1.5)
 
     obs = sub.add_parser(
