@@ -61,6 +61,21 @@ def export_provinces_summary() -> Path:
     return dst
 
 
+def export_taxon_list() -> Path | None:
+    """Pass through the species catalog for the frontend autocomplete.
+
+    Optional — returns None if no source exists, so a partially-set-up
+    repo can still produce the provinces export.
+    """
+    src = RAW_DIR / "taxon_list.json"
+    if not src.exists():
+        return None
+    dst = OUT_DIR / "taxon_list.json"
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, dst)
+    return dst
+
+
 def bar_chart(conn: sqlite3.Connection, province: str, taxon: str) -> list[dict]:
     rows = conn.execute(
         BAR_CHART_SQL, {"province": province, "taxon": taxon}
@@ -95,6 +110,10 @@ def main() -> None:
 
     out = export_provinces_summary()
     print(f"wrote {out}")
+
+    taxon_out = export_taxon_list()
+    if taxon_out:
+        print(f"wrote {taxon_out}")
 
     if args.bar_chart:
         province, taxon = args.bar_chart
