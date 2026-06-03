@@ -86,7 +86,7 @@ async def search_yunnan(token: str, start: str, end: str, page: int, limit: int)
         "taxonid": "",
         "startTime": start,
         "endTime": end,
-        "province": "云南省",
+        "province": "云南",
         "city": "",
         "district": "",
         "pointname": "",
