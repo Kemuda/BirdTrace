@@ -114,6 +114,9 @@ async def search_yunnan(token: str, start: str, end: str, page: int, limit: int)
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(SEARCH_URL, headers=headers, content=encrypted_body)
 
+    print(f"DEBUG response status: {resp.status_code}")
+    print(f"DEBUG response body: {resp.text[:1500]}")
+
     resp.raise_for_status()
     envelope = resp.json()
     if envelope.get("code") != 0:
@@ -131,7 +134,7 @@ async def main():
     start = time.strftime("%Y-%m-%d", time.localtime(time.time() - 30 * 86400))
     print(f"Fetching Yunnan checklists, {start} -> {end}, page=1, limit=10")
 
-    records = await search_yunnan(token, start, end, page=1, limit=10)
+    records = await search_yunnan(token, start, end, page=1, limit=100)
 
     print(f"Got {len(records)} checklists.")
     if records:
