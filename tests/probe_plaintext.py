@@ -11,7 +11,17 @@ import httpx
 
 def main():
     url = "https://api.birdreport.cn/front/province/summary/chart"
-    headers = {"Content-Type": "application/json"}
+    headers = {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+        "Content-Type": "application/json",
+        "Origin": "https://www.birdreport.cn",
+        "Referer": "https://www.birdreport.cn/",
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        ),
+    }
     body = {"version": "CH4"}
 
     resp = httpx.post(url, headers=headers, json=body, timeout=30)
