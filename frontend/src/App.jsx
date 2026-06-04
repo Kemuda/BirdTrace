@@ -98,7 +98,7 @@ export default function App() {
               <span className="t">Trace</span>
             </h1>
           </div>
-          <div className="sub">中国观鸟记录中心数据 · 探索界面</div>
+          <div className="sub">鸟迹</div>
         </div>
       </div>
 
