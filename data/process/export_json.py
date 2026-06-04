@@ -12,6 +12,7 @@ import json
 import shutil
 import sqlite3
 from pathlib import Path
+from urllib.parse import quote, quote_plus
 
 from build_db import DB_PATH, connect
 
@@ -50,6 +51,34 @@ def ebird_code(latin: str | None) -> str | None:
         name = (first.get("name", "") if isinstance(first, dict) else first).split("/")[0]
     hit = sci.get(name) or sci.get(latin)
     return hit[0] if hit else None
+
+
+# --- 懂鸟 link map (vendored: parsed from dongniao.net/taxonomy.html) ---------
+# 中文名 -> {nd: 分类编号, en: 英文名}。懂鸟物种页 = /nd/{nd}/{中文名}/{en}/{en}，
+# 编号是必须的（光中文名拼不出，已实测）。
+_DONGNIAO: dict | None = None
+
+
+def _dongniao_map() -> dict:
+    global _DONGNIAO
+    if _DONGNIAO is None:
+        p = REFS_DIR / "dongniao_name_to_nd.json"
+        _DONGNIAO = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    return _DONGNIAO
+
+
+def species_links(name: str, latin: str | None, code: str | None) -> dict:
+    """Outbound reference links per species: eBird / 懂鸟 / Xeno-canto(鸣声)."""
+    links: dict = {}
+    if code:
+        links["ebird"] = f"https://ebird.org/species/{code}"
+    dn = _dongniao_map().get(name)
+    if dn:
+        en = quote_plus(dn["en"])
+        links["dongniao"] = f"https://dongniao.net/nd/{dn['nd']}/{quote(name)}/{en}/{en}"
+    if latin:
+        links["xenocanto"] = f"https://xeno-canto.org/species/{latin.replace(' ', '-')}"
+    return links
 
 
 # --- 居留型推断（留鸟/夏候鸟/冬候鸟/旅鸟/不确定）-----------------------------
@@ -322,14 +351,12 @@ def _stop_grain(stop: dict) -> str:
     return "province"
 
 
-def trip_stop_bundle(conn: sqlite3.Connection, stop: dict,
-                     seasonal_map: dict | None = None) -> dict:
+def trip_stop_bundle(conn: sqlite3.Connection, stop: dict) -> dict:
     """Build one stop's bundle + honesty metadata for the trip month.
 
-    `seasonal_map`: province-level {species_name -> 居留型} (留鸟/夏候鸟/…) so
-    each row can show seasonal occurrence instead of a raw rhythm sparkline.
+    NB: 居留型(seasonal) 暂不输出 —— 没有权威数据源，只能从出现模式推断，Amber
+    决定先不展示（`classify_seasonal` 保留备用）。
     """
-    seasonal_map = seasonal_map or {}
     bundle = _bundle(conn, stop["province"], stop.get("districts", ()),
                      stop.get("city"), stop.get("points", ()))
     mi = int(TRIP_MONTH) - 1
@@ -339,8 +366,7 @@ def trip_stop_bundle(conn: sqlite3.Connection, stop: dict,
         {
             "name": s["name"],
             "latin_name": s["latin_name"],
-            "ebird_code": s.get("ebird_code"),
-            "seasonal": seasonal_map.get(s["name"], "不确定"),
+            "links": species_links(s["name"], s["latin_name"], s.get("ebird_code")),
             "reports": s["monthly"][mi],
             "frequency_pct": round(100.0 * s["monthly"][mi] / total, 1) if total else 0.0,
         }
@@ -371,17 +397,8 @@ def export_trip() -> list[Path]:
     trip_dir.mkdir(parents=True, exist_ok=True)
     manifest = []
     with connect() as conn:
-        # 居留型按**省级**全年模式判定（居留型是区域属性，不是某个点位的属性），
-        # 各停留点的物种按名字查表。黑颈鹤在云南判为冬候、在西藏(仅6月)判不确定 —— 正确。
-        seasonal_by_prov: dict[str, dict] = {}
-        for prov in dict.fromkeys(s["province"] for s in TRIP_STOPS):
-            pb = _bundle(conn, prov)
-            tot = pb["total_reports"]
-            seasonal_by_prov[prov] = {
-                sp["name"]: classify_seasonal(sp["monthly"], tot) for sp in pb["species"]
-            }
         for stop in TRIP_STOPS:
-            b = trip_stop_bundle(conn, stop, seasonal_by_prov.get(stop["province"], {}))
+            b = trip_stop_bundle(conn, stop)
             dst = trip_dir / f"{b['id']}.json"
             dst.write_text(json.dumps(b, ensure_ascii=False, indent=2), encoding="utf-8")
             out.append(dst)

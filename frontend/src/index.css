@@ -259,49 +259,27 @@ body {
 
 .row {
   display: grid;
-  grid-template-columns: 1.6fr 64px 56px;
+  grid-template-columns: 1fr 56px;
   align-items: center;
   gap: 10px;
   padding: 7px 8px;
   border-top: 1px solid var(--line-soft);
 }
-.sp-name .cn a {
-  color: var(--ink);
-  text-decoration: none;
-  border-bottom: 1px dotted var(--line);
+/* 外链簇：eBird / 懂鸟 / 鸣声 */
+.sp-name .links {
+  display: flex;
+  gap: 12px;
+  margin-top: 3px;
 }
-.sp-name .cn a:hover {
-  color: var(--hand);
-  border-bottom-color: var(--hand);
-}
-/* 居留型徽标 */
-.season {
+.sp-name .links a {
   font-size: 11px;
-  font-weight: 500;
-  text-align: center;
-  padding: 2px 4px;
-  border-radius: 5px;
-  white-space: nowrap;
-}
-.season.resident {
-  color: var(--present);
-  background: rgba(63, 125, 87, 0.12);
-}
-.season.summer {
-  color: #a86a14;
-  background: rgba(217, 169, 46, 0.18);
-}
-.season.winter {
   color: var(--hand);
-  background: rgba(59, 92, 138, 0.12);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--hand);
 }
-.season.passage {
-  color: #7a5bb0;
-  background: rgba(122, 91, 176, 0.14);
-}
-.season.uncertain {
-  color: var(--ink-soft);
-  background: var(--paper-2);
+.sp-name .links a:hover {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
 }
 .row:hover {
   background: var(--paper-2);

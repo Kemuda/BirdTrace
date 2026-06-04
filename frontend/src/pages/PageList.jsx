@@ -8,36 +8,29 @@ const TIERS = [
   { cls: "tier-rare", name: "撞大运 · 稀有", hint: "<20%", test: (f) => f < 20 },
 ];
 
-// 居留型 → 配色 class。居留型由后端从省级全年模式推断（见 export_json.py）。
-const SEASON_CLS = {
-  留鸟: "resident",
-  夏候鸟: "summer",
-  冬候鸟: "winter",
-  旅鸟: "passage",
-  不确定: "uncertain",
-};
-
 function SpRow({ d }) {
   const rare = d.frequency_pct < 20;
-  const eb = d.ebird_code ? `https://ebird.org/species/${d.ebird_code}` : null;
+  const L = d.links || {};
   return (
     <div className="row">
       <div className="sp-name">
         <span className="cn">
-          {eb ? (
-            <a href={eb} target="_blank" rel="noreferrer" title="在 eBird 上查看">
-              {d.name}
-            </a>
-          ) : (
-            d.name
-          )}
+          {d.name}
           {rare && <span className="star">★</span>}
         </span>
         <span className="la">{d.latin_name || ""}</span>
+        <span className="links">
+          {L.ebird && (
+            <a href={L.ebird} target="_blank" rel="noreferrer">eBird</a>
+          )}
+          {L.dongniao && (
+            <a href={L.dongniao} target="_blank" rel="noreferrer">懂鸟</a>
+          )}
+          {L.xenocanto && (
+            <a href={L.xenocanto} target="_blank" rel="noreferrer">鸣声♪</a>
+          )}
+        </span>
       </div>
-      <span className={"season " + (SEASON_CLS[d.seasonal] || "uncertain")}>
-        {d.seasonal}
-      </span>
       <div className="freq">
         {d.frequency_pct}
         <small>%</small>
@@ -176,12 +169,8 @@ export default function PageList({ stops, stopId, onStop }) {
 
       <div className="take">
         <div className="legend">
-          <span><span className="season resident">留鸟</span></span>
-          <span><span className="season summer">夏候鸟</span></span>
-          <span><span className="season winter">冬候鸟</span></span>
-          <span><span className="season passage">旅鸟</span></span>
-          <span><span className="season uncertain">不确定</span></span>
-          <span><span className="star">★</span>稀有 · 点鸟名→eBird</span>
+          <span><span className="star">★</span>稀有</span>
+          <span>每行可跳 eBird / 懂鸟 / 鸣声(Xeno-canto)</span>
         </div>
         <button className="btn solid" onClick={exportList} disabled={!species.length}>
           ⤓ 导出当日目标鸟单
