@@ -50,10 +50,22 @@ body {
   gap: 12px;
   margin-bottom: 14px;
 }
+.app-head .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .app-head h1 {
   font-size: 22px;
-  font-weight: 700;
+  font-weight: 900;
+  letter-spacing: -0.01em;
   margin: 0;
+}
+.app-head h1 .b {
+  color: var(--ink);
+}
+.app-head h1 .t {
+  color: var(--hi-line);
 }
 .app-head .sub {
   font-size: 12px;

@@ -82,7 +82,22 @@ export default function App() {
     <div className="app">
       <div className="app-head">
         <div>
-          <h1>BirdTrace</h1>
+          <div className="brand">
+            {/* 望远镜鸮：望远镜机身 = 鸮的脸，金瞳 = 招牌金 */}
+            <svg width="30" height="30" viewBox="0 0 80 80" fill="none" aria-label="BirdTrace">
+              <rect x="9" y="15" width="62" height="56" rx="27" fill="#fbf9f4" stroke="#33312c" strokeWidth="3.5" />
+              <path d="M21 17 L29 27 M59 17 L51 27" stroke="#33312c" strokeWidth="3.5" strokeLinecap="round" />
+              <circle cx="30" cy="42" r="11" fill="none" stroke="#33312c" strokeWidth="3.5" />
+              <circle cx="50" cy="42" r="11" fill="none" stroke="#33312c" strokeWidth="3.5" />
+              <circle cx="30" cy="42" r="4.2" fill="#d9a92e" />
+              <circle cx="50" cy="42" r="4.2" fill="#d9a92e" />
+              <path d="M40 49 L36 56 L44 56 Z" fill="#33312c" />
+            </svg>
+            <h1>
+              <span className="b">Bird</span>
+              <span className="t">Trace</span>
+            </h1>
+          </div>
           <div className="sub">中国观鸟记录中心数据 · 探索界面</div>
         </div>
       </div>
