@@ -156,6 +156,41 @@ body {
   color: #fff;
 }
 
+/* 卡住提醒弹窗 */
+.owl-alert {
+  max-width: 380px;
+  border-color: #c2553f;
+}
+.owl-alert .modal-h {
+  color: #c2553f;
+}
+.owl-body {
+  display: flex;
+  gap: 12px;
+  padding: 16px 18px;
+  align-items: flex-start;
+}
+.owl-body .owl-ico {
+  font-size: 34px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.owl-body p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+.owl-body p b {
+  color: var(--ink);
+}
+.owl-act {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 18px 16px;
+}
+
 /* ---- wireframe page shell ---- */
 .wf {
   background: var(--paper);

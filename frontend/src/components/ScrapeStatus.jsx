@@ -6,8 +6,9 @@ import { useEffect, useRef, useState } from "react";
 // 卡住时（false→true）播一声红角鸮叫（Otus sunia，Wikimedia Commons 公有领域）。
 export default function ScrapeStatus() {
   const [s, setS] = useState(null);
+  const [showAlert, setShowAlert] = useState(false); // 卡住时弹一次提醒
   const audioRef = useRef(null);
-  const playedRef = useRef(false); // 同一次 stall 只叫一次，恢复后重置
+  const playedRef = useRef(false); // 同一次 stall 只叫一次/弹一次，恢复后重置
 
   useEffect(() => {
     let alive = true;
@@ -36,15 +37,17 @@ export default function ScrapeStatus() {
     });
   }
 
-  // 进入 stalled 时叫一声；恢复（不再 stalled）后重置，下次再卡会再叫
+  // 进入 stalled 时叫一声 + 弹一次提醒；恢复后重置，下次再卡会再叫/再弹
   useEffect(() => {
     if (s?.stalled) {
       if (!playedRef.current) {
         playedRef.current = true;
         hoot();
+        setShowAlert(true);
       }
     } else {
       playedRef.current = false;
+      setShowAlert(false); // 自己恢复了就把提醒关掉
     }
   }, [s?.stalled]);
 
@@ -58,6 +61,31 @@ export default function ScrapeStatus() {
         <source src="/sound/otus-sunia.mp3" type="audio/mpeg" />
         <source src="/sound/otus-sunia.ogg" type="audio/ogg" />
       </audio>
+
+      {showAlert && (
+        <div className="modal-bg" onClick={() => setShowAlert(false)}>
+          <div className="modal owl-alert" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-h">
+              <b>⚠ 鸟种明细补抓卡住了</b>
+              <button className="x" onClick={() => setShowAlert(false)} aria-label="关闭">
+                ×
+              </button>
+            </div>
+            <div className="owl-body">
+              <div className="owl-ico">🦉</div>
+              <p>
+                后台补抓连续撞验证码、暂时没新进展（{s.have_total}/{s.target_total}）。
+                验证码是<b>自动换会话重试</b>的，<b>不需要你手动解</b>；若长时间卡住多半是网络被限，
+                换个网络或稍后再试即可。它会自己继续，你也可以先做别的。
+              </p>
+            </div>
+            <div className="owl-act">
+              <button className="btn sm" onClick={hoot}>🔊 再听一次</button>
+              <button className="btn sm solid" onClick={() => setShowAlert(false)}>知道了</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="srow">
         <b>
