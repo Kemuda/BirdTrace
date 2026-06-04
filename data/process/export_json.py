@@ -82,9 +82,13 @@ def species_links(name: str, latin: str | None, code: str | None) -> dict:
 
 
 # --- 居留型推断（留鸟/夏候鸟/冬候鸟/旅鸟/不确定）-----------------------------
-# 没有现成的居留型数据源（commonBird/eBird 都没有该字段），所以从**省级 12 个月
-# 出现模式**推断：只在「有采样努力」的月份判断在/不在，两季都采样到才敢下留/候鸟
-# 的结论，否则诚实地标「不确定」（西藏只有 6 月数据 → 基本都是不确定）。
+# ⚠️ DORMANT / 待解决问题（2026-06-04，Amber 决定先不展示）：
+#   目前没有权威的居留型数据源（commonBird / eBird 都没有该字段）。下面这个
+#   `classify_seasonal` 是从**省级 12 个月出现模式**做的**推断**，不是权威数据，
+#   样本稀疏时很不可靠（西藏只有 6 月 → 几乎全是「不确定」）。因此暂不接入导出/前端。
+#   留作 dormant，等接入权威居留型表（如各省鸟类名录的居留型字段）或 eBird Status &
+#   Trends 的季节定义后再启用。详见 TODO.md「待解决：居留型数据源」。
+#   —— 改动前请先解决数据源问题，不要直接拿这个推断结果当权威展示。
 _BREED = {3, 4, 5, 6}   # idx → 4–7 月，繁殖季
 _WINTER = {11, 0, 1}    # 12,1,2 月，越冬季
 _PASSAGE = {2, 7, 8, 9}  # 3,8,9,10 月，过境季（近似）
@@ -384,9 +388,11 @@ def trip_stop_bundle(conn: sqlite3.Connection, stop: dict) -> dict:
         "total_reports_month": total,
         "species_count_month": len(month_species),
         "data_status": status,          # none | thin | ok
-        "month_species": month_species,  # ranked, trip-month only
-        "total_reports": bundle["total_reports"],  # 12-mo, for Bar Chart reuse
-        "species": bundle["species"],              # 12-mo, full detail
+        "month_species": month_species,  # ranked, trip-month only —— 前端唯一用到的
+        # NB: 不再输出 12 月 `species`/`total_reports` 数组 —— 名录页只用
+        # month_species，那两个大数组（每点全物种×12月）纯属冗余。「何时去」页用的是
+        # 省级 bundle（province/<省>.json），不是 trip bundle。需要按景点画 12 月柱图时
+        # 再加回（用 _bundle(...) 的结果），别默认带着。
     }
 
 
