@@ -19,11 +19,13 @@
 | 云南 6/9-10 | 丽江/玉龙（玉龙雪山·云杉坪/束河/蓝月谷） | 6 月 64 份 checklist，**仅 2 份有物种明细** |
 | 云南 6/11-12 | 香格里拉（独克宗/松赞林寺/普达措/虎跳峡） | 6 月 17 份，**1 份有物种** |
 | 云南 6/12-13 | 德钦（梅里/雾浓顶/飞来寺） | 6 月 3 份，**1 份有物种** |
-| 西藏 6/14-22 | 拉萨/日喀则/玛旁雍错/冈仁波齐/扎达 | **DB 完全没有，从零抓** |
+| 西藏 6/14-22 | 拉萨/日喀则/玛旁雍错/冈仁波齐/扎达 | ✅ 已抓 660 份入库（拉萨 6 月 17、日喀则 7、普兰 1、札达 4-5 月有 6 月 0）；物种明细后台抓中 |
 
-- [x] **`fetch_trip.py` 定向抓取（task bljs4ffhz 已结束）**：跑完了，但**西藏一份都没抓到** —— `data/raw/checklists/西藏/` 是空目录，Phase1 建了文件夹没写任何文件；云南行程区 observation 也没新增（raw 仍 79 份）。说明 birdreport.cn 西藏段要么源站零覆盖、要么全程被 captcha 挡死。**结论：西藏段 MVP 无数据，名录页只能诚实显示「该段暂无记录」。**
-  - [x] ~~确认西藏源站可行性~~ → 抓取层已证明拿不到；要补只能换 cookie 登录态重试（见 Backlog captcha B/C），否则接受西藏段空白
-- [x] **export 支持地点粒度**（2026-06-04）：`export_json.py` 加 `--trip`。把旧 `province_bundle` 泛化成 `_bundle(province, districts)`（districts 空=整省，旧省级导出零回归）。按 `docs/itinerary-june.md` 把 7 个行程停留点映射到省/区县，每点导出 `frontend/public/data/trip/<id>.json`（行程月 ranked 物种清单 + 12 月明细复用 Bar Chart 口径）+ `trip/manifest.json`。**自带数据诚实性 `data_status` = none/thin(N<15)/ok**。实测：玉龙 thin(2 报告/42 种)、香格里拉 thin(1/17)、德钦 thin(1/3)、西藏 4 段全 none
+- [x] **西藏其实有数据 —— 之前抓空是 `fetch_trip.py` 的 bug，不是源站没数据**（2026-06-04，Amber 给了西藏报告列表 URL 才发现）：
+  - 真相：Phase1 能抓到 660 份西藏 checklist；但 Phase2 的 `yn_trip_report_ids()` SQL 用 `%` 拼 IN 子句，同串里有 `strftime('%m',…)`，Python 把 `%m` 当格式符 **崩溃**，导致 observation 从来没抓成、且进程整个挂掉（第一次 task 看到的「空目录」是另一次赶上 captcha 窗口）。**已修**（改成字符串拼接）。
+  - [x] 西藏 660 份 checklist 已 `load_checklists.py` 入库（自动归一化「西藏自治区」→「西藏」）
+  - [~] **物种明细后台抓中**（task bc6sraa4c，690 个待抓，~3s/个 + captcha 冷却）：云南行程区 + 全西藏报告的 observation。抓完再 load + 重导出
+- [x] **export 支持地点粒度**（2026-06-04）：`export_json.py` 加 `--trip`。把旧 `province_bundle` 泛化成 `_bundle(province, districts, city)`：区县 > 市/地区 > 整省 三级过滤（省级旧导出零回归，已验证 312 种/月度计数不变）。按 `docs/itinerary-june.md` 把 7 个行程停留点映射到省/市/区县（西藏粒度按真实覆盖定：拉萨/日喀则用市级，阿里转山/扎达用区县），每点导出 `trip/<id>.json`（行程月 ranked 物种 + 12 月明细复用 Bar Chart 口径）+ `trip/manifest.json`。**自带数据诚实性 `data_status` = none/thin(N<15)/ok + `grain`**。当前实测（物种待 observation 抓完）：拉萨 6 月 17 报告 ok、日喀则 7 thin、玉龙 thin(2/42)、香格里拉 thin(1/17)、德钦 thin(1/3)、普兰 1、札达 0(none)
 - [ ] 多省支持：export / 前端能切云南↔西藏
 
 ### 前端 / 产品（等线框图）

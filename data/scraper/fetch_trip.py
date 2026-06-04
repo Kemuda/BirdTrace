@@ -119,12 +119,14 @@ def yn_trip_report_ids() -> list[str]:
     conn = sqlite3.connect(DB_PATH)
     ids: list[str] = []
     for city, districts in YN_TRIP:
+        # NB: build the IN-clause by concatenation, NOT %-formatting — the SQL
+        # contains strftime('%m', …) and `% (...)` would choke on '%m'.
+        placeholders = ",".join("?" * len(districts))
         q = (
             "SELECT report_id, strftime('%m', start_time) AS m FROM checklists "
-            "WHERE province='云南' AND city=? AND district IN (%s) "
+            "WHERE province='云南' AND city=? AND district IN (" + placeholders + ") "
             "AND strftime('%m', start_time) IN ('05','06','07') "
             "ORDER BY (m='06') DESC, m"
-            % ",".join("?" * len(districts))
         )
         for row in conn.execute(q, (city, *districts)):
             ids.append(row[0])
