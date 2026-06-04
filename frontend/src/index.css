@@ -586,6 +586,163 @@ body {
   align-items: center;
 }
 
+/* ---- list tools (我的鸟种 / 只看目标) ---- */
+.list-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.btn.sm {
+  padding: 5px 11px;
+  font-size: 12px;
+  border-radius: 7px;
+}
+.btn.sm.ghost {
+  border-color: var(--line);
+  color: var(--ink-soft);
+}
+.chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.chk input {
+  cursor: pointer;
+}
+
+/* ---- per-species marks: badges / chips / note ---- */
+.badge {
+  font-size: 12px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+}
+.chip {
+  border: 1.5px solid var(--line-soft);
+  background: #fff;
+  color: var(--ink-soft);
+  border-radius: 20px;
+  padding: 2px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.6;
+}
+.chip:hover {
+  border-color: var(--line);
+  color: var(--ink);
+}
+.chip.on {
+  border-color: var(--hi-line);
+  background: var(--hi);
+  color: #5e4708;
+  font-weight: 600;
+}
+.note-edit {
+  margin-top: 6px;
+}
+.note-edit textarea {
+  width: 100%;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  resize: vertical;
+  background: #fff;
+}
+.note-act {
+  display: flex;
+  gap: 8px;
+  margin-top: 5px;
+}
+.note-show {
+  margin-top: 5px;
+  font-size: 12px;
+  color: #6a5410;
+  background: #fff7e0;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  padding: 5px 9px;
+  cursor: pointer;
+  line-height: 1.45;
+}
+
+/* ---- 我的鸟种 modal extras ---- */
+.mk-backup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--paper-2);
+}
+.mk-hint {
+  font-size: 10px;
+  color: var(--ink-soft);
+  flex: 1 1 100%;
+  line-height: 1.4;
+}
+.mk-sec {
+  padding: 8px 18px 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.mk-sec:first-child {
+  border-top: none;
+}
+.mk-sec-h {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 0 6px;
+}
+.mk-sec-h .ct {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 400;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+.mk-sec-empty {
+  font-size: 11px;
+  color: var(--ink-soft);
+  padding: 2px 0 4px;
+}
+.mk-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.mk-name {
+  flex: 1;
+  font-size: 13px;
+}
+.mk-note {
+  display: block;
+  font-size: 11px;
+  color: #6a5410;
+  margin-top: 2px;
+}
+.mk-x {
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.mk-x:hover {
+  color: #c2553f;
+}
+
 /* ---- bar chart ---- */
 .chart {
   display: flex;

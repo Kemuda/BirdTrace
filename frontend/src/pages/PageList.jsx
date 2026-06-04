@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import QueryBar from "../components/QueryBar.jsx";
 import ReportList from "../components/ReportList.jsx";
+import TargetList from "../components/TargetList.jsx";
+import { useMarks } from "../hooks/useMarks.js";
 
 // 频率分层：几乎必见 / 有机会 / 撞大运·稀有。
 const TIERS = [
@@ -9,15 +11,30 @@ const TIERS = [
   { cls: "tier-rare", name: "撞大运 · 稀有", hint: "<20%", test: (f) => f < 20 },
 ];
 
-function SpRow({ d }) {
+function SpRow({ d, mark, onToggle, onNote }) {
   const rare = d.frequency_pct < 20;
   const L = d.links || {};
+  const m = mark || {};
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  function openNote() {
+    setDraft(m.note || "");
+    setEditing(true);
+  }
+  function saveNote() {
+    onNote(d.name, draft.trim());
+    setEditing(false);
+  }
+
   return (
     <div className="row">
       <div className="sp-name">
         <span className="cn">
           {d.name}
-          {rare && <span className="star">★</span>}
+          {rare && <span className="star" title="稀有">★</span>}
+          {m.seen && <span className="badge seen" title="已见过">👁</span>}
+          {m.target && <span className="badge tgt" title="目标鸟种">🎯</span>}
         </span>
         <span className="la">{d.english_name || ""}</span>
         <span className="links">
@@ -31,6 +48,41 @@ function SpRow({ d }) {
             <a href={L.xenocanto} target="_blank" rel="noreferrer">鸣声♪</a>
           )}
         </span>
+        <span className="chips">
+          <button className={"chip" + (m.target ? " on" : "")} onClick={() => onToggle(d.name, "target")}>
+            ★目标
+          </button>
+          <button className={"chip" + (m.learned ? " on" : "")} onClick={() => onToggle(d.name, "learned")}>
+            📖已学习
+          </button>
+          <button className={"chip" + (m.seen ? " on" : "")} onClick={() => onToggle(d.name, "seen")}>
+            👁已见过
+          </button>
+          <button className={"chip" + (m.note ? " on" : "")} onClick={openNote}>
+            ✎笔记
+          </button>
+        </span>
+        {editing ? (
+          <div className="note-edit">
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="记点备注…（识别要点、想拍的姿态、栖息地…）"
+              rows={2}
+              autoFocus
+            />
+            <div className="note-act">
+              <button className="btn sm" onClick={saveNote}>保存</button>
+              <button className="btn sm ghost" onClick={() => setEditing(false)}>取消</button>
+            </div>
+          </div>
+        ) : (
+          m.note && (
+            <div className="note-show" onClick={openNote} title="点击编辑">
+              ✎ {m.note}
+            </div>
+          )
+        )}
       </div>
       <div className="freq">
         {d.frequency_pct}
@@ -40,7 +92,7 @@ function SpRow({ d }) {
   );
 }
 
-function Tier({ cls, name, hint, rows }) {
+function Tier({ cls, name, hint, rows, marks, onToggle, onNote }) {
   if (!rows.length) return null;
   return (
     <div className={"tier " + cls}>
@@ -53,7 +105,7 @@ function Tier({ cls, name, hint, rows }) {
         {name} <span className="ct">{hint} · {rows.length} 种</span>
       </div>
       {rows.map((d) => (
-        <SpRow key={d.name} d={d} />
+        <SpRow key={d.name} d={d} mark={marks[d.name]} onToggle={onToggle} onNote={onNote} />
       ))}
     </div>
   );
@@ -63,6 +115,9 @@ export default function PageList({ stops, stopId, onStop }) {
   const [bundle, setBundle] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showReports, setShowReports] = useState(false);
+  const [showTargets, setShowTargets] = useState(false);
+  const [onlyTarget, setOnlyTarget] = useState(false);
+  const { marks, toggle, setNote, importMarks } = useMarks();
 
   useEffect(() => {
     if (!stopId) return;
@@ -89,6 +144,10 @@ export default function PageList({ stops, stopId, onStop }) {
   const n = bundle?.total_reports_month ?? 0;
   const reports = bundle?.reports || [];
   const stop = stops.find((s) => s.id === stopId);
+
+  const markCount = Object.keys(marks).length;
+  const targetCount = Object.values(marks).filter((m) => m.target).length;
+  const shownSpecies = onlyTarget ? species.filter((s) => marks[s.name]?.target) : species;
 
   // 可点的「N 份报告」→ 打开报告列表弹窗
   const reportLink = reports.length ? (
@@ -157,6 +216,21 @@ export default function PageList({ stops, stopId, onStop }) {
             <>基于 {reportLink} · 行程月</>
           )}
         </div>
+        <div className="list-tools">
+          <button type="button" className="btn sm" onClick={() => setShowTargets(true)}>
+            ★ 我的鸟种{markCount ? ` (${markCount})` : ""}
+          </button>
+          {targetCount > 0 && (
+            <label className="chk">
+              <input
+                type="checkbox"
+                checked={onlyTarget}
+                onChange={(e) => setOnlyTarget(e.target.checked)}
+              />
+              只看目标
+            </label>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -168,6 +242,11 @@ export default function PageList({ stops, stopId, onStop }) {
             ? "阿里等偏远段在中国观鸟记录中心本就稀疏；可换拉萨/日喀则段，或等抓取补充。"
             : "该地行程月样本不足；可换相邻停留点。"}
         </div>
+      ) : onlyTarget && shownSpecies.length === 0 ? (
+        <div className="empty">
+          <div className="big">这一段没有你的目标鸟种</div>
+          已收藏 {targetCount} 种目标，但这段 6 月记录里都没出现；可取消「只看目标」看全部。
+        </div>
       ) : (
         TIERS.map((t) => (
           <Tier
@@ -175,7 +254,10 @@ export default function PageList({ stops, stopId, onStop }) {
             cls={t.cls}
             name={t.name}
             hint={t.hint}
-            rows={species.filter((s) => t.test(s.frequency_pct))}
+            rows={shownSpecies.filter((s) => t.test(s.frequency_pct))}
+            marks={marks}
+            onToggle={toggle}
+            onNote={setNote}
           />
         ))
       )}
@@ -194,6 +276,15 @@ export default function PageList({ stops, stopId, onStop }) {
           label={stop?.label || stopId}
           reports={reports}
           onClose={() => setShowReports(false)}
+        />
+      )}
+
+      {showTargets && (
+        <TargetList
+          marks={marks}
+          toggle={toggle}
+          importMarks={importMarks}
+          onClose={() => setShowTargets(false)}
         />
       )}
     </div>
