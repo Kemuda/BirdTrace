@@ -161,7 +161,15 @@ async def _sweep_checklists(client, province: str, sweeps, out_dir: Path,
                 break
             recs = _records(r)
             if not recs:
-                log(f"  {tag} 到 page{page} 空，停")
+                # Save the empty terminal page as a completion marker. Without this,
+                # a sweep whose record count is an exact multiple of PAGE_LIMIT leaves
+                # its highest *saved* page "full", so _resume_point keeps resuming at
+                # this same empty page every later run — an avoidable request (and
+                # possible retry/captcha spend) before Phase2 on an already-done sweep.
+                (out_dir / f"{tag}_{page:04d}.json").write_text(
+                    json.dumps(r, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+                log(f"  {tag} 到 page{page} 空，停（记空页标记）")
                 break
             (out_dir / f"{tag}_{page:04d}.json").write_text(
                 json.dumps(r, ensure_ascii=False, indent=2), encoding="utf-8"

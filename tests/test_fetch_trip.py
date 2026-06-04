@@ -27,6 +27,12 @@ class TestResumePoint(unittest.TestCase):
         full = [(p, LIMIT) for p in range(1, 13)]  # 12 full pages, cap=12
         self.assertIsNone(F._resume_point(full, 12))
 
+    def test_complete_when_empty_terminal_page_marked(self):
+        # Exact-multiple-of-LIMIT sweep: pages 1..2 full, page 3 = empty marker
+        # (count 0, written by _sweep_checklists). Must read as complete, not
+        # resume at the empty page 3 forever.
+        self.assertIsNone(F._resume_point([(1, LIMIT), (2, LIMIT), (3, 0)], 80))
+
     def test_interrupted_all_full_resumes_after_last(self):
         # pages 1..3 all full, no terminal seen -> resume at 4, NOT skip
         self.assertEqual(F._resume_point([(1, LIMIT), (2, LIMIT), (3, LIMIT)], 80), 4)
