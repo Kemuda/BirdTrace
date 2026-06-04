@@ -117,6 +117,7 @@ export default function PageList({ stops, stopId, onStop }) {
   const [showReports, setShowReports] = useState(false);
   const [showTargets, setShowTargets] = useState(false);
   const [onlyTarget, setOnlyTarget] = useState(false);
+  const [showFreq, setShowFreq] = useState(false);
   const { marks, toggle, setNote, importMarks } = useMarks();
 
   useEffect(() => {
@@ -148,6 +149,13 @@ export default function PageList({ stops, stopId, onStop }) {
   const markCount = Object.keys(marks).length;
   const targetCount = Object.values(marks).filter((m) => m.target).length;
   const shownSpecies = onlyTarget ? species.filter((s) => marks[s.name]?.target) : species;
+
+  const years = bundle?.report_years || {};
+  const yearStr = Object.keys(years)
+    .sort()
+    .map((y) => `${y} 年（${years[y]} 份）`)
+    .join(" + ");
+  const pending = reports.filter((r) => !r.has_detail).length;
 
   // 可点的「N 份报告」→ 打开报告列表弹窗
   const reportLink = reports.length ? (
@@ -232,6 +240,33 @@ export default function PageList({ stops, stopId, onStop }) {
           )}
         </div>
       </div>
+
+      {status !== "none" && species.length > 0 && (
+        <div className="freqinfo">
+          <button type="button" className="fi-toggle" onClick={() => setShowFreq((v) => !v)}>
+            ⓘ 频率怎么算{showFreq ? "（收起）" : ""}
+          </button>
+          {showFreq && (
+            <div className="fi-body">
+              <p>
+                <b>频率 = 含该鸟的报告数 ÷ 该地 6 月总报告数 × 100。</b>
+                和 eBird 的「frequency」同口径：衡量的是<b>遇见率</b>（多少份清单记录到它），不是数量多少。
+              </p>
+              {pending > 0 && (
+                <p className="fi-warn">
+                  注意：现在分母里有 {pending} 份报告是「明细待抓」（声明有鸟、但后台还没抓到鸟种清单），
+                  所以这些鸟的频率<b>偏低</b> —— 等明细补抓完会自动上调。点上方「{n} 份报告」可逐份核对。
+                </p>
+              )}
+              {yearStr && (
+                <p className="fi-year">
+                  样本年份：{yearStr} 6 月合并。<small>（已包含往年同期数据；样本越薄、越靠合并历年补足）</small>
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="empty">加载中…</div>

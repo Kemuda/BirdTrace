@@ -586,6 +586,48 @@ body {
   align-items: center;
 }
 
+/* ---- 频率说明 ---- */
+.freqinfo {
+  margin-top: -4px;
+}
+.fi-toggle {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 11px;
+  color: var(--hand);
+  cursor: pointer;
+}
+.fi-toggle:hover {
+  color: var(--ink);
+}
+.fi-body {
+  margin-top: 6px;
+  border: 1.5px solid var(--line-soft);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--paper-2);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.fi-body p {
+  margin: 0 0 6px;
+}
+.fi-body p:last-child {
+  margin-bottom: 0;
+}
+.fi-body b {
+  color: var(--ink);
+}
+.fi-warn {
+  color: #8a6a14;
+}
+.fi-year small {
+  color: var(--line);
+}
+
 /* ---- list tools (我的鸟种 / 只看目标) ---- */
 .list-tools {
   display: flex;

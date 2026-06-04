@@ -472,6 +472,13 @@ def trip_stop_bundle(conn: sqlite3.Connection, stop: dict) -> dict:
     ]
     month_species.sort(key=lambda x: (-x["reports"], x["name"]))
     status = "none" if total == 0 else ("thin" if total < THIN_SAMPLE else "ok")
+    reports = _stop_reports(conn, stop)
+    # 频率分母按年份拆开（#8 数据透明：现在就是「合并历年 6 月」，不是只今年）。
+    report_years: dict[str, int] = {}
+    for r in reports:
+        y = (r["time"] or "")[:4]
+        if y:
+            report_years[y] = report_years.get(y, 0) + 1
     return {
         **{k: stop[k] for k in ("id", "label", "dates", "province")},
         "region": stop.get("region", stop["province"]),
@@ -483,7 +490,8 @@ def trip_stop_bundle(conn: sqlite3.Connection, stop: dict) -> dict:
         "total_reports_month": total,
         "species_count_month": len(month_species),
         "data_status": status,          # none | thin | ok
-        "reports": _stop_reports(conn, stop),  # 报告列表页（编号/时间/用户/地点/鸟种 + 明细）
+        "report_years": report_years,   # {年: 该年6月报告数} —— 频率合并了哪些年
+        "reports": reports,             # 报告列表页（编号/时间/用户/地点/鸟种 + 明细）
         "month_species": month_species,  # ranked, trip-month only —— 前端唯一用到的
         # NB: 不再输出 12 月 `species`/`total_reports` 数组 —— 名录页只用
         # month_species，那两个大数组（每点全物种×12月）纯属冗余。「何时去」页用的是
