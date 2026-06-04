@@ -40,8 +40,8 @@ def _ebird_refs() -> tuple[dict, dict]:
     return _EBIRD_SCI, _CH4_FIX
 
 
-def ebird_code(latin: str | None) -> str | None:
-    """birdreport 学名 -> eBird speciesCode (None if no match)."""
+def _ebird_hit(latin: str | None) -> list | None:
+    """birdreport 学名 -> eBird ref entry [speciesCode, comName] (None if no match)."""
     if not latin:
         return None
     sci, fix = _ebird_refs()
@@ -49,8 +49,26 @@ def ebird_code(latin: str | None) -> str | None:
     if isinstance(name, list):  # taxonomic split -> take first eBird name
         first = name[0]
         name = (first.get("name", "") if isinstance(first, dict) else first).split("/")[0]
-    hit = sci.get(name) or sci.get(latin)
+    return sci.get(name) or sci.get(latin)
+
+
+def ebird_code(latin: str | None) -> str | None:
+    """birdreport 学名 -> eBird speciesCode (None if no match)."""
+    hit = _ebird_hit(latin)
     return hit[0] if hit else None
+
+
+def english_common(name: str | None) -> str | None:
+    """中文名 -> 英文 common name（None if no match）。
+
+    Amber 不看拉丁名，列表用英文俗名。来源是 vendored 的懂鸟映射
+    （dongniao_name_to_nd.json 每条 = {nd, en}，en 即英文俗名），按中文名查，
+    覆盖约 96%。NB: ebird_sci_to_code.json 的 comName 是**中文**本地化名、不能用。
+    """
+    if not name:
+        return None
+    dn = _dongniao_map().get(name)
+    return dn.get("en") if dn else None
 
 
 # --- 懂鸟 link map (vendored: parsed from dongniao.net/taxonomy.html) ---------
@@ -304,44 +322,64 @@ THIN_SAMPLE = 15  # N < THIN_SAMPLE -> flag as 样本薄 (PRD 数据诚实性)
 # 阿里玛旁雍错/扎达本就是独立地点用区县级。点位字段很乱，所以 6 月真实数据常落在
 # 不出名的点上（玉龙 6 月物种其实在玉峰寺/玉水寨，不在玉龙雪山）—— 故招牌景点会
 # 诚实显示空/薄，同时给真正有数据的点也单列，免得数据消失。
+# 每点带 `region`（省·市·区县 的可读串，display 用，补全「只有景区缺省市」的问题，
+# Amber #2）。`region` 不参与查询过滤 —— 过滤仍走 districts/points/city。
 TRIP_STOPS = [
-    # —— 云南 · 丽江段（6/9–11）——
+    # —— 云南 · 丽江市段（6/9–11）——
+    {"id": "lijiang-city", "label": "丽江市（全市汇总）", "dates": "6/9–11",
+     "province": "云南", "region": "云南 · 丽江市（全市）", "city": "丽江市"},
     {"id": "yulong-snow", "label": "玉龙雪山 · 云杉坪", "dates": "6/9–10",
-     "province": "云南", "districts": ("玉龙纳西族自治县",), "points": ("玉龙雪山", "云杉坪")},
+     "province": "云南", "region": "云南 · 丽江市 · 玉龙县",
+     "districts": ("玉龙纳西族自治县",), "points": ("玉龙雪山", "云杉坪")},
     {"id": "blue-moon", "label": "蓝月谷", "dates": "6/9–10",
-     "province": "云南", "districts": ("玉龙纳西族自治县",), "points": ("蓝月谷",)},
+     "province": "云南", "region": "云南 · 丽江市 · 玉龙县",
+     "districts": ("玉龙纳西族自治县",), "points": ("蓝月谷",)},
     {"id": "yufeng", "label": "玉峰寺 · 玉水寨 · 白沙", "dates": "6/10",
-     "province": "云南", "districts": ("玉龙纳西族自治县",), "points": ("玉峰寺", "玉水寨", "白沙")},
+     "province": "云南", "region": "云南 · 丽江市 · 玉龙县",
+     "districts": ("玉龙纳西族自治县",), "points": ("玉峰寺", "玉水寨", "白沙")},
     {"id": "shuhe", "label": "束河古镇", "dates": "6/10",
-     "province": "云南", "points": ("束河",)},
+     "province": "云南", "region": "云南 · 丽江市", "points": ("束河",)},
     {"id": "lijiang-old", "label": "丽江古城 · 黑龙潭", "dates": "6/9",
-     "province": "云南", "districts": ("古城区",),
+     "province": "云南", "region": "云南 · 丽江市 · 古城区", "districts": ("古城区",),
      "points": ("古城", "黑龙潭", "狮子山", "四方街", "木府", "九鼎", "博物")},
     {"id": "tiger-leap", "label": "虎跳峡", "dates": "6/11",
-     "province": "云南", "points": ("虎跳峡",)},
-    # —— 云南 · 迪庆/香格里拉段（6/11–12, 14）——
+     "province": "云南", "region": "云南 · 丽江市 / 迪庆", "points": ("虎跳峡",)},
+    # —— 云南 · 迪庆藏族自治州 / 香格里拉段（6/11–12, 14）——
     {"id": "dukezong", "label": "独克宗古城", "dates": "6/11",
-     "province": "云南", "districts": ("香格里拉市",), "points": ("独克宗", "月光", "龟山")},
+     "province": "云南", "region": "云南 · 迪庆 · 香格里拉",
+     "districts": ("香格里拉市",), "points": ("独克宗", "月光", "龟山")},
     {"id": "songzanlin", "label": "松赞林寺", "dates": "6/12",
-     "province": "云南", "districts": ("香格里拉市",), "points": ("松赞林", "噶丹")},
+     "province": "云南", "region": "云南 · 迪庆 · 香格里拉",
+     "districts": ("香格里拉市",), "points": ("松赞林", "噶丹")},
     {"id": "pudacuo", "label": "普达措国家公园", "dates": "6/11–12",
-     "province": "云南", "districts": ("香格里拉市",), "points": ("普达措", "属都", "碧塔海")},
+     "province": "云南", "region": "云南 · 迪庆 · 香格里拉",
+     "districts": ("香格里拉市",), "points": ("普达措", "属都", "碧塔海")},
+    {"id": "alpine-garden", "label": "高山植物园", "dates": "6/11–12",
+     "province": "云南", "region": "云南 · 迪庆 · 香格里拉",
+     "districts": ("香格里拉市",), "points": ("高山植物园", "植物园")},
     {"id": "napahai", "label": "纳帕海", "dates": "6/11–12",
-     "province": "云南", "districts": ("香格里拉市",), "points": ("纳帕海", "依拉")},
+     "province": "云南", "region": "云南 · 迪庆 · 香格里拉",
+     "districts": ("香格里拉市",), "points": ("纳帕海", "依拉")},
     # —— 云南 · 德钦段（6/12–13）——
     {"id": "meili", "label": "飞来寺 · 梅里 · 雾浓顶", "dates": "6/12–13",
-     "province": "云南", "districts": ("德钦县",), "points": ("飞来寺", "梅里", "雾浓顶")},
+     "province": "云南", "region": "云南 · 迪庆 · 德钦",
+     "districts": ("德钦县",), "points": ("飞来寺", "梅里", "雾浓顶")},
     {"id": "baima", "label": "白马雪山", "dates": "6/12–13",
-     "province": "云南", "districts": ("德钦县",), "points": ("白马雪山",)},
+     "province": "云南", "region": "云南 · 迪庆 · 德钦",
+     "districts": ("德钦县",), "points": ("白马雪山",)},
     # —— 西藏（无具体景点用市级；阿里独立地点用区县级）——
     {"id": "lhasa", "label": "拉萨（市级）", "dates": "6/14–15",
-     "province": "西藏", "city": "拉萨市"},
+     "province": "西藏", "region": "西藏 · 拉萨市", "city": "拉萨市"},
     {"id": "shigatse", "label": "日喀则（市级）", "dates": "6/15–16",
-     "province": "西藏", "city": "日喀则市"},
+     "province": "西藏", "region": "西藏 · 日喀则市", "city": "日喀则市"},
     {"id": "manasarovar", "label": "玛旁雍错 · 普兰", "dates": "6/17–19",
-     "province": "西藏", "districts": ("普兰县",)},
+     "province": "西藏", "region": "西藏 · 阿里 · 普兰", "districts": ("普兰县",)},
+    {"id": "kailash", "label": "冈仁波齐（转山）", "dates": "6/18–19",
+     "province": "西藏", "region": "西藏 · 阿里 · 普兰（冈仁波齐转山）",
+     "districts": ("普兰县",),
+     "points": ("冈仁波齐", "岗仁波齐", "塔钦", "止热", "卓玛拉", "转山")},
     {"id": "zanda", "label": "扎达土林 · 古格", "dates": "6/20–21",
-     "province": "西藏", "districts": ("札达县",)},
+     "province": "西藏", "region": "西藏 · 阿里 · 札达", "districts": ("札达县",)},
 ]
 
 
@@ -370,6 +408,7 @@ def trip_stop_bundle(conn: sqlite3.Connection, stop: dict) -> dict:
         {
             "name": s["name"],
             "latin_name": s["latin_name"],
+            "english_name": english_common(s["name"]),
             "links": species_links(s["name"], s["latin_name"], s.get("ebird_code")),
             "reports": s["monthly"][mi],
             "frequency_pct": round(100.0 * s["monthly"][mi] / total, 1) if total else 0.0,
@@ -380,6 +419,7 @@ def trip_stop_bundle(conn: sqlite3.Connection, stop: dict) -> dict:
     status = "none" if total == 0 else ("thin" if total < THIN_SAMPLE else "ok")
     return {
         **{k: stop[k] for k in ("id", "label", "dates", "province")},
+        "region": stop.get("region", stop["province"]),
         "city": stop.get("city"),
         "districts": list(stop.get("districts", ())),
         "points": list(stop.get("points", ())),
@@ -410,7 +450,7 @@ def export_trip() -> list[Path]:
             out.append(dst)
             manifest.append({
                 "id": b["id"], "label": b["label"], "dates": b["dates"],
-                "province": b["province"], "city": b["city"],
+                "province": b["province"], "region": b["region"], "city": b["city"],
                 "districts": b["districts"], "points": b["points"], "grain": b["grain"],
                 "total_reports_month": b["total_reports_month"],
                 "species_count_month": b["species_count_month"],

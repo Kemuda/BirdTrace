@@ -18,7 +18,7 @@ function SpRow({ d }) {
           {d.name}
           {rare && <span className="star">★</span>}
         </span>
-        <span className="la">{d.latin_name || ""}</span>
+        <span className="la">{d.english_name || ""}</span>
         <span className="links">
           {L.ebird && (
             <a href={L.ebird} target="_blank" rel="noreferrer">eBird</a>
@@ -89,9 +89,9 @@ export default function PageList({ stops, stopId, onStop }) {
 
   function exportList() {
     if (!species.length) return;
-    const head = `${stop?.label || stopId} · 6月目标鸟单（基于 ${n} 份报告）\n物种\t拉丁名\t频率%\t报告数\n`;
+    const head = `${stop?.label || stopId} · 6月目标鸟单（基于 ${n} 份报告）\n物种\t英文名\t频率%\t报告数\n`;
     const body = species
-      .map((s) => `${s.name}\t${s.latin_name || ""}\t${s.frequency_pct}\t${s.reports}`)
+      .map((s) => `${s.name}\t${s.english_name || ""}\t${s.frequency_pct}\t${s.reports}`)
       .join("\n");
     const blob = new Blob([head + body], { type: "text/plain;charset=utf-8" });
     const a = document.createElement("a");
@@ -103,10 +103,7 @@ export default function PageList({ stops, stopId, onStop }) {
 
   return (
     <div className="wf">
-      <div className="wf-tag">
-        <b>看什么</b>
-        <span className="combo">地 + 时 → 鸟</span>
-      </div>
+      <div className="wf-desc">行程驱动的「时间 + 地点 → 鸟种」</div>
 
       <QueryBar
         where={
@@ -122,6 +119,8 @@ export default function PageList({ stops, stopId, onStop }) {
         what=""
         answer="what"
       />
+
+      {stop?.region && <div className="region">📍 {stop.region}</div>}
 
       {/* 季节速读：当前只给事实速读，AI 自然语言摘要在 Backlog */}
       {status !== "none" && species.length > 0 && (
@@ -170,10 +169,9 @@ export default function PageList({ stops, stopId, onStop }) {
       <div className="take">
         <div className="legend">
           <span><span className="star">★</span>稀有</span>
-          <span>每行可跳 eBird / 懂鸟 / 鸣声(Xeno-canto)</span>
         </div>
         <button className="btn solid" onClick={exportList} disabled={!species.length}>
-          ⤓ 导出当日目标鸟单
+          ⤓ 导出目标鸟单
         </button>
       </div>
     </div>
