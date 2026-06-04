@@ -52,7 +52,8 @@ export default function ScrapeStatus() {
   }, [s?.stalled]);
 
   if (!s || (!s.running && !s.stalled && !s.done)) return null;
-  const pct = s.target_total ? Math.round((s.have_total / s.target_total) * 100) : 0;
+  // floor，避免 863/865 被四舍五入成 100% 却还显示"还差 2 份"
+  const pct = s.target_total ? Math.floor((s.have_total / s.target_total) * 100) : 0;
   const remaining = Math.max((s.target_total || 0) - (s.have_total || 0), 0);
   const trulyDone = s.done && remaining === 0;       // 真抓全了
   const endedShort = s.done && remaining > 0;         // 进程结束但没抓全（到上限/放弃）

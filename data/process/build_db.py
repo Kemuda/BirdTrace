@@ -63,6 +63,13 @@ def main() -> None:
         if "english_name" not in cols:
             conn.execute("ALTER TABLE observations ADD COLUMN english_name TEXT")
             print("migrated: observations += english_name")
+        # checklists: 单报告详情(/front/activity/get) 带回的 pointId / address
+        # （lat/lng 列本就有，之前列表接口拿不到、现在 get 能拿到坐标回填）。
+        ck = [r[1] for r in conn.execute("PRAGMA table_info(checklists)")]
+        for col in ("point_id", "address"):
+            if col not in ck:
+                conn.execute(f"ALTER TABLE checklists ADD COLUMN {col} TEXT")
+                print(f"migrated: checklists += {col}")
     print(f"schema ready -> {DB_PATH}")
 
 
