@@ -1,6 +1,8 @@
 # BirdTrace
 
-为[中国观鸟记录中心](https://birdreport.cn) 的数据构建更好的探索界面，对标 eBird Explorer。第一阶段重点：12 个月出现频率柱状图（Bar Chart）。
+为[中国观鸟记录中心](https://birdreport.cn) 的数据构建更好的探索界面，对标 eBird Explorer。
+
+当前 MVP：**行程驱动的「时间 + 地点 → 鸟种」**。前端三页共用统一三槽查询条（地点 / 时间 / 鸟种，留空那一槽＝本页答案）：① **看什么**（名录，地+时→鸟，MVP 核心）② **何时去**（12 月柱状图，地+鸟→时）③ **去哪看**（地图，时+鸟→地，待经纬度）。详见 `docs/mvp-trip.md`。
 
 设计文档：`birdreport-prd.md`。  
 第三方代码 / 数据来源的鸣谢与 License：`THIRD_PARTY_NOTICES.md`。
@@ -10,22 +12,29 @@
 ```
 data/scraper/         直连 birdreport.cn 抓数据
   birdreport_client.py     签名 + RSA-encrypt + AES-decrypt 的 async 客户端
+                           （505 反爬封会话，撞墙时 reset() 换新会话重试）
   fetch_provinces.py       明文 36 省概览
   fetch_taxon_list.py      明文 一次性鸟种名录
   fetch_taxa.py            （备用）按 ID 扫鸟种详情
-  fetch_checklists.py      加密 抓 checklist + observation
+  fetch_checklists.py      加密 抓 checklist + observation（按省）
+  fetch_trip.py            行程定向抓取：按行程区+历史同期月抓 checklist+observation
   public_key.pem           前端 RSA 公钥
 
 data/process/         JSON → SQLite → 静态 JSON
   build_db.py              建表
-  load_taxa.py             导入鸟种
-  load_checklists.py       导入 checklist + observation
-  export_json.py           聚合输出到 frontend/public/data/
+  load_taxa.py / load_checklists.py   导入
+  export_json.py           聚合输出到 frontend/public/data/（--province / --trip）
 
-frontend/             React + Vite + Tailwind + recharts
-  src/App.jsx              主界面（省份选择 + 物种 autocomplete）
-  src/components/BarChart.jsx
-  public/data/             静态数据（由 export_json.py 写入）
+data/raw/refs/        vendored 参考映射（入库，非抓取产物，见 THIRD_PARTY_NOTICES）
+  ebird_sci_to_code.json   eBird 学名→speciesCode（拼 eBird 物种页链接）
+  ch4_to_eb_taxon_map.json birdreport→eBird 学名差异修正
+  dongniao_name_to_nd.json 中文名→懂鸟分类编号（拼懂鸟物种页链接）
+
+frontend/             React + Vite + Tailwind
+  src/App.jsx              三页外壳 + 共享数据加载（?p=list|chart|map 深链）
+  src/components/          QueryBar（三槽查询条）
+  src/pages/               PageList 名录 / PageChart 柱图 / PageMap 地图占位
+  public/data/             静态数据（由 export_json.py 写入，gitignore）
 ```
 
 ## 端到端跑一遍
@@ -60,6 +69,23 @@ python3 data/process/export_json.py --province 云南
 cd frontend && npm run dev
 # 浏览器开 http://localhost:5173，省份选云南、物种填黑颈鹤，点查看
 ```
+
+### 行程 MVP（名录页数据）
+
+```bash
+# 按行程区 + 历史同期月定向抓（行程见 docs/itinerary-june.md）；
+# 带 captcha 自动恢复（505 换会话重试）、3h 上限。抓完 load 再导出。
+python3 data/scraper/fetch_trip.py
+python3 data/process/load_checklists.py
+python3 data/process/export_json.py --trip   # 写 frontend/public/data/trip/*
+```
+
+### 测试
+
+```bash
+python3 -m unittest discover -s tests   # 离线单元测试，无需联网/pytest
+```
+`tests/probe_*.py` 是**联网探针**（手动跑、验证线上接口），不是测试 —— 见 `tests/README.md`。
 
 ## 范围扩缩
 

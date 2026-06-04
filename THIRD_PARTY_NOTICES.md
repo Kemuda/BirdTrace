@@ -2,6 +2,26 @@
 
 This project's birdreport.cn API client (request signing, RSA-chunked request encryption, and AES-CBC response decryption) is adapted from two upstream open-source projects. Both are MIT-licensed.
 
+## commonBird
+
+- Repository: https://github.com/CKRainbow/commonBird
+- License: MIT
+- Vendored into `data/raw/refs/`:
+  - `ebird_sci_to_code.json` — slimmed from commonBird's `ebird_taxonomy.json`
+    (eBird scientific name → speciesCode + common name). Used to link each
+    species to its `ebird.org/species/<code>` page.
+  - `ch4_to_eb_taxon_map.json` — birdreport(CH4) → eBird 学名 reconciliation
+    (~98 names that differ taxonomically), so the eBird join matches.
+- The underlying eBird taxonomy is © Cornell Lab of Ornithology.
+
+## 懂鸟 / Xeno-canto (物种外链)
+
+- `data/raw/refs/dongniao_name_to_nd.json` — 中文名 → {懂鸟分类编号, 英文名}，
+  解析自懂鸟公开分类页 https://dongniao.net/taxonomy.html，仅用于拼接指回懂鸟
+  物种页的深链（`/nd/{编号}/{中文名}/{英文名}`）。© dongniao.net (懂鸟 / Aboutbirds)。
+- Xeno-canto 鸣声链接由拉丁学名直接拼接（`xeno-canto.org/species/{Genus-species}`），
+  不落地任何数据。© Xeno-canto Foundation，录音为各贡献者所有（多为 CC 协议）。
+
 ## qBird
 
 - Repository: https://github.com/TaQini/qBird
