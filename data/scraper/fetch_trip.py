@@ -30,8 +30,9 @@ DB_PATH = BASE / "db" / "birdreport.sqlite"
 CHK_DIR = BASE / "raw" / "checklists"
 OBS_DIR = BASE / "raw" / "observations"
 
-COOLDOWN = 600          # seconds to wait after a captcha 505 before retrying
-MAX_COOLDOWNS = 14      # give up a single request after this many cooldowns
+COOLDOWN = 60           # short backoff: when a human is solving the captcha live,
+                        # a 10-min sleep wastes their fix — retry soon after.
+MAX_COOLDOWNS = 40      # give up a single request after this many cooldowns
 DEADLINE = time.time() + 3 * 3600   # hard wall-clock stop (3h)
 
 # 云南 trip stops -> (city, districts). Sorted so June reports here get obs first.
