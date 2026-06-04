@@ -30,9 +30,9 @@ DB_PATH = BASE / "db" / "birdreport.sqlite"
 CHK_DIR = BASE / "raw" / "checklists"
 OBS_DIR = BASE / "raw" / "observations"
 
-COOLDOWN = 60           # short backoff: when a human is solving the captcha live,
-                        # a 10-min sleep wastes their fix — retry soon after.
-MAX_COOLDOWNS = 40      # give up a single request after this many cooldowns
+COOLDOWN = 8            # 505 flags the session, not the IP — we reset the client
+                        # (fresh session) and retry quickly, no long sleep needed.
+MAX_COOLDOWNS = 40      # give up a single request after this many resets
 DEADLINE = time.time() + 3 * 3600   # hard wall-clock stop (3h)
 
 # 云南 trip stops -> (city, districts). Sorted so June reports here get obs first.
@@ -65,9 +65,10 @@ def _records(payload):
     return []
 
 
-async def req_with_retry(make_coro, label: str):
-    """Run one request; on captcha 505/405 sleep COOLDOWN and retry the SAME
-    request. Returns None if we exhaust cooldowns or pass the deadline."""
+async def req_with_retry(client, make_coro, label: str):
+    """Run one request; on captcha 505/405 RESET the client (fresh session —
+    the block is per-session, not per-IP) then retry. Returns None if we exhaust
+    resets or pass the deadline."""
     cd = 0
     while True:
         if time.time() > DEADLINE:
@@ -78,7 +79,8 @@ async def req_with_retry(make_coro, label: str):
         except BirdReportError as e:
             if e.code in (505, 405) and cd < MAX_COOLDOWNS:
                 cd += 1
-                log(f"  captcha on {label} → 冷却 {COOLDOWN}s ({cd}/{MAX_COOLDOWNS})")
+                log(f"  captcha on {label} → 重置会话 + 冷却 {COOLDOWN}s ({cd}/{MAX_COOLDOWNS})")
+                await client.reset()
                 await asyncio.sleep(COOLDOWN)
                 continue
             log(f"  give up {label}: {e}")
@@ -117,6 +119,7 @@ async def _sweep_checklists(client, province: str, sweeps, out_dir: Path,
         kept = 0
         for page in range(1, max_pages + 1):
             r = await req_with_retry(
+                client,
                 lambda p=page: client.search_checklists(province, start=start, end=end, page=p, limit=50),
                 f"{province} {tag} p{page}",
             )
@@ -210,7 +213,7 @@ async def phase2_observations(client, yn_june_ids: list[str], tibet_ids: list[st
         if time.time() > DEADLINE:
             log("Phase2 deadline reached, stopping")
             break
-        data = await req_with_retry(lambda r=rid: client.get_observations(r), f"obs {rid[:8]}")
+        data = await req_with_retry(client, lambda r=rid: client.get_observations(r), f"obs {rid[:8]}")
         if data is None:
             continue
         (OBS_DIR / f"{rid}.json").write_text(

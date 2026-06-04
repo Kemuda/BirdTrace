@@ -112,6 +112,17 @@ class BirdReportClient:
         if self._owns_http:
             await self._http.aclose()
 
+    async def reset(self) -> None:
+        """Drop the current connection pool and start a fresh session.
+
+        birdreport's anti-bot (code 505) flags the *session/connection*, not the
+        IP — once a client trips it, retrying on the same httpx client keeps
+        getting 505, but a brand-new client from the same IP succeeds. So on a
+        captcha hit we reset instead of hammering the poisoned session."""
+        if self._owns_http:
+            await self._http.aclose()
+            self._http = httpx.AsyncClient(timeout=30.0)
+
     async def __aenter__(self) -> "BirdReportClient":
         return self
 
