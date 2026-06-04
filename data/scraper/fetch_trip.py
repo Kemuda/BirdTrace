@@ -34,6 +34,7 @@ COOLDOWN = 8            # 505 flags the session, not the IP — we reset the cli
                         # (fresh session) and retry quickly, no long sleep needed.
 MAX_COOLDOWNS = 40      # give up a single request after this many resets
 DEADLINE = time.time() + 3 * 3600   # hard wall-clock stop (3h)
+PAGE_LIMIT = 50         # records/page; a page shorter than this is the sweep's end
 
 # 云南 trip stops -> (city, districts). Sorted so June reports here get obs first.
 YN_TRIP = [
@@ -87,6 +88,23 @@ async def req_with_retry(client, make_coro, label: str):
             return None
 
 
+def _resume_point(pages: list[tuple[int, int]], max_pages: int) -> int | None:
+    """Decide where a checklist sweep should (re)start from, given the already-
+    saved pages as [(page_number, record_count), …] (any order).
+
+    Returns the next page number to fetch, or None if the sweep is already
+    complete. A sweep is complete only when its highest saved page is "short"
+    (< PAGE_LIMIT → the natural terminal) or it reached `max_pages`. Otherwise
+    resume just past the highest saved page — so an interrupted sweep (pages
+    1..N then a captcha at N+1) continues at N+1 instead of being skipped."""
+    if not pages:
+        return 1
+    last_page, last_count = max(pages)
+    if last_count < PAGE_LIMIT or last_page >= max_pages:
+        return None
+    return last_page + 1
+
+
 async def _sweep_checklists(client, province: str, sweeps, out_dir: Path,
                             max_pages: int, district_filter: set | None = None) -> list[str]:
     """Page a province's checklists over date `sweeps`, save raw, return report_ids.
@@ -95,35 +113,51 @@ async def _sweep_checklists(client, province: str, sweeps, out_dir: Path,
     (used to keep just the trip stops out of a whole-province sweep)."""
     out_dir.mkdir(parents=True, exist_ok=True)
     ids: list[str] = []
+
+    def collect(recs) -> int:
+        n = 0
+        for rec in recs:
+            rid = rec.get("reportId") or rec.get("report_id")
+            if not rid:
+                continue
+            if district_filter is not None:
+                dn = rec.get("district_name") or rec.get("district")
+                if dn not in district_filter:
+                    continue
+            ids.append(rid)
+            n += 1
+        return n
+
     for start, end, tag in sweeps:
-        # Idempotent restart: if this sweep's raw pages already exist, don't
-        # re-fetch (wasteful + risks a captcha BEFORE the valuable obs phase) —
-        # just re-read the report_ids out of the saved files.
-        existing = sorted(out_dir.glob(f"{tag}_*.json"))
-        if existing:
-            kept = 0
-            for f in existing:
-                for rec in _records(json.loads(f.read_text(encoding="utf-8"))):
-                    rid = rec.get("reportId") or rec.get("report_id")
-                    if not rid:
-                        continue
-                    if district_filter is not None:
-                        dn = rec.get("district_name") or rec.get("district")
-                        if dn not in district_filter:
-                            continue
-                    ids.append(rid)
-                    kept += 1
-            log(f"Phase1 {province} {tag}: 已有 {len(existing)} 页 raw，跳过抓取（{kept} 个 id）")
-            continue
-        log(f"Phase1 {province} {tag}: 抓 checklist")
+        # Resume, don't blindly skip: reuse already-saved pages, then continue
+        # from the first MISSING page. A sweep interrupted at page N+1 (captcha /
+        # deadline) left pages 1..N — we must still fetch >N, not skip the sweep
+        # just because some pages exist. Only treat it as already-complete when
+        # the last saved page is "short" (the natural terminal) or hit the cap.
+        existing = sorted(out_dir.glob(f"{tag}_*.json"),
+                          key=lambda p: int(p.stem.rsplit("_", 1)[-1]))
         kept = 0
-        for page in range(1, max_pages + 1):
+        pages: list[tuple[int, int]] = []
+        for f in existing:
+            recs = _records(json.loads(f.read_text(encoding="utf-8")))
+            kept += collect(recs)
+            pages.append((int(f.stem.rsplit("_", 1)[-1]), len(recs)))
+        start_page = _resume_point(pages, max_pages)
+        if start_page is None:
+            log(f"Phase1 {province} {tag}: 已抓全 {pages[-1][0]} 页，跳过（{kept} 个 id）")
+            continue
+        if existing:
+            log(f"Phase1 {province} {tag}: 已有 {pages[-1][0]} 页，从 p{start_page} 续抓（已 {kept} id）")
+        else:
+            log(f"Phase1 {province} {tag}: 抓 checklist")
+        for page in range(start_page, max_pages + 1):
             r = await req_with_retry(
                 client,
-                lambda p=page: client.search_checklists(province, start=start, end=end, page=p, limit=50),
+                lambda p=page: client.search_checklists(province, start=start, end=end, page=p, limit=PAGE_LIMIT),
                 f"{province} {tag} p{page}",
             )
-            if r is None:
+            if r is None:   # captcha exhausted / deadline — leave the rest for next run
+                log(f"  {tag} p{page} 抓不到，留待下次续抓")
                 break
             recs = _records(r)
             if not recs:
@@ -132,19 +166,10 @@ async def _sweep_checklists(client, province: str, sweeps, out_dir: Path,
             (out_dir / f"{tag}_{page:04d}.json").write_text(
                 json.dumps(r, ensure_ascii=False, indent=2), encoding="utf-8"
             )
-            for rec in recs:
-                rid = rec.get("reportId") or rec.get("report_id")
-                if not rid:
-                    continue
-                if district_filter is not None:
-                    dn = rec.get("district_name") or rec.get("district")
-                    if dn not in district_filter:
-                        continue
-                ids.append(rid)
-                kept += 1
+            kept += collect(recs)
             extra = f"（行程区累计 {kept}）" if district_filter is not None else ""
             log(f"  {tag} page{page}: {len(recs)} 条{extra}")
-            if len(recs) < 50:
+            if len(recs) < PAGE_LIMIT:
                 break
             await asyncio.sleep(1.5)
         else:
