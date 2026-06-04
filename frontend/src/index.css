@@ -733,6 +733,11 @@ body {
   flex: 1 1 100%;
   line-height: 1.4;
 }
+.mk-ok {
+  font-size: 11px;
+  color: var(--present);
+  flex: 1 1 100%;
+}
 .mk-sec {
   padding: 8px 18px 12px;
   border-top: 1px solid var(--line-soft);

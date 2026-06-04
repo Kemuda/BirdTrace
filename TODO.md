@@ -21,8 +21,11 @@ Amber 给的「看什么」issue list，分 4 批做完 + 1 项调研。
   实时进度 + 前端进度条（验证码自动换会话重试、**不需人工解**；卡住才告警）。已验证补抓是**真数据**
   （白马雪山 0→34 种；独克宗红嘴山鸦 33.3%→83.3%）。⚠️ 后台进程未必跑完 628 份——撞 505 越来越频，
   **可重跑 `fetch_trip.py` 续抓**，再 `load_checklists.py` + `export_json.py --trip`
-- [ ] **eBird 接入(#6,#3.4)**：Amber 要先调研。已写 `docs/ebird-integration-research-prompt.md`
-  （路线A: Life List CSV→已见过，纯前端优先；路线B: 热点频率补薄样本）。等调研结论再实现
+- [x] **eBird 路线A 已做(#3.4)**：Amber 给了 `ebird_world_year_list.csv`。前端「我的鸟种」加「导入 eBird CSV」按钮，
+  按中文名(+学名桥接 `ebird_sci_to_cn.json` 兜底)标「已见过」。纯前端解析、存 localStorage、不上传。
+  实测她 52 行全标上、31 种出现在行程名录。eBird 括号别名(白骨顶(骨顶鸡))靠学名桥接纠正
+- [ ] **eBird 路线B(#6)**：用 eBird 热点频率补 birdreport 薄样本——较重、需 API key/条款核查，
+  见 `docs/ebird-integration-research-prompt.md`，等 Amber 决定
 
 ---
 

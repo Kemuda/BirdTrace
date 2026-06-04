@@ -500,11 +500,30 @@ def trip_stop_bundle(conn: sqlite3.Connection, stop: dict) -> dict:
     }
 
 
+def export_ebird_bridge() -> Path:
+    """学名 -> birdreport 中文名 桥接表（前端导入 eBird CSV 标「已见过」用，#3.4）。
+
+    eBird 的中文俗名偶尔和 birdreport 的写法有别（如 䴙䴘 vs 鸊鷉），用学名兜底对齐。
+    取自 observations 的 (latin_name -> taxon_name)。
+    """
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT latin_name, taxon_name FROM observations "
+            "WHERE latin_name IS NOT NULL AND latin_name <> '' AND taxon_name IS NOT NULL"
+        ).fetchall()
+    bridge = {la: cn for la, cn in rows}
+    dst = OUT_DIR / "ebird_sci_to_cn.json"
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_text(json.dumps(bridge, ensure_ascii=False, indent=2), encoding="utf-8")
+    return dst
+
+
 def export_trip() -> list[Path]:
     """Write one bundle per trip stop + an ordered manifest."""
     out: list[Path] = []
     trip_dir = OUT_DIR / "trip"
     trip_dir.mkdir(parents=True, exist_ok=True)
+    out.append(export_ebird_bridge())
     manifest = []
     with connect() as conn:
         for stop in TRIP_STOPS:
