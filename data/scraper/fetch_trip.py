@@ -41,6 +41,17 @@ YN_TRIP = [
     ("迪庆藏族自治州", ("香格里拉市", "德钦县", "维西傈僳族自治县")),  # 独克宗/松赞林寺/普达措/虎跳峡/梅里/雾浓顶
 ]
 
+# 行程区 district_name 集合，用来从「全云南 6 月」里筛出行程停留点的报告。
+TRIP_DISTRICTS = {"玉龙纳西族自治县", "古城区", "香格里拉市", "德钦县", "维西傈僳族自治县"}
+
+# 关键修正（Amber 2026-06-04）：之前云南「6 月」其实是 2026 年 6 月头几天（今天才
+# 6/4），样本太薄、不能代表整个 6 月。改抓**历史同期**整月 June，和西藏口径对齐。
+# search API 只能按省+日期筛（无区县），所以抓全云南 6 月、再按 TRIP_DISTRICTS 筛。
+YN_JUNE_SWEEPS = [
+    ("2025-06-01", "2025-06-30", "2025-06"),
+    ("2024-06-01", "2024-06-30", "2024-06"),
+]
+
 
 def log(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
@@ -74,18 +85,21 @@ async def req_with_retry(make_coro, label: str):
             return None
 
 
-async def phase1_tibet_checklists(client) -> list[str]:
-    """Fetch 西藏 checklists (June first, then recent sweep). Returns report_ids."""
-    out_dir = CHK_DIR / "西藏"
+async def _sweep_checklists(client, province: str, sweeps, out_dir: Path,
+                            max_pages: int, district_filter: set | None = None) -> list[str]:
+    """Page a province's checklists over date `sweeps`, save raw, return report_ids.
+
+    If `district_filter` is given, only collect ids whose `district_name` is in it
+    (used to keep just the trip stops out of a whole-province sweep)."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    report_ids: list[str] = []
-    sweeps = [("2025-06-01", "2025-06-30", "2025-06"), ("", "", "recent")]
+    ids: list[str] = []
     for start, end, tag in sweeps:
-        log(f"Phase1 西藏 {tag}: 抓 checklist")
-        for page in range(1, 13):
+        log(f"Phase1 {province} {tag}: 抓 checklist")
+        kept = 0
+        for page in range(1, max_pages + 1):
             r = await req_with_retry(
-                lambda p=page: client.search_checklists("西藏", start=start, end=end, page=p, limit=50),
-                f"西藏 {tag} p{page}",
+                lambda p=page: client.search_checklists(province, start=start, end=end, page=p, limit=50),
+                f"{province} {tag} p{page}",
             )
             if r is None:
                 break
@@ -98,18 +112,44 @@ async def phase1_tibet_checklists(client) -> list[str]:
             )
             for rec in recs:
                 rid = rec.get("reportId") or rec.get("report_id")
-                if rid:
-                    report_ids.append(rid)
-            log(f"  {tag} page{page}: {len(recs)} 条")
+                if not rid:
+                    continue
+                if district_filter is not None:
+                    dn = rec.get("district_name") or rec.get("district")
+                    if dn not in district_filter:
+                        continue
+                ids.append(rid)
+                kept += 1
+            extra = f"（行程区累计 {kept}）" if district_filter is not None else ""
+            log(f"  {tag} page{page}: {len(recs)} 条{extra}")
             if len(recs) < 50:
                 break
             await asyncio.sleep(1.5)
+        else:
+            log(f"  {tag} 抓满 {max_pages} 页上限（可能还有更老的没抓）")
     # dedupe, keep order
     seen, uniq = set(), []
-    for rid in report_ids:
+    for rid in ids:
         if rid not in seen:
             seen.add(rid); uniq.append(rid)
+    return uniq
+
+
+async def phase1_tibet_checklists(client) -> list[str]:
+    """Fetch 西藏 checklists (June 2025 first, then recent sweep)."""
+    sweeps = [("2025-06-01", "2025-06-30", "2025-06"), ("", "", "recent")]
+    uniq = await _sweep_checklists(client, "西藏", sweeps, CHK_DIR / "西藏", max_pages=12)
     log(f"Phase1 done: 西藏 {len(uniq)} 个唯一报告")
+    return uniq
+
+
+async def phase1_yunnan_june(client) -> list[str]:
+    """Fetch 云南 historical June (2025+2024), keep only trip-district reports."""
+    uniq = await _sweep_checklists(
+        client, "云南", YN_JUNE_SWEEPS, CHK_DIR / "云南",
+        max_pages=80, district_filter=TRIP_DISTRICTS,
+    )
+    log(f"Phase1 done: 云南行程区历史 6 月 {len(uniq)} 个唯一报告")
     return uniq
 
 
@@ -135,10 +175,11 @@ def yn_trip_report_ids() -> list[str]:
     return ids
 
 
-async def phase2_observations(client, tibet_ids: list[str]) -> None:
+async def phase2_observations(client, yn_june_ids: list[str], tibet_ids: list[str]) -> None:
     OBS_DIR.mkdir(parents=True, exist_ok=True)
-    # 云南 trip June-first, then all 西藏
-    targets = yn_trip_report_ids() + tibet_ids
+    # 顺序：云南行程区历史 6 月（本轮新抓，尚未入库）→ DB 里已有的云南行程区 →
+    # 全西藏。先 6 月历史，把招牌景点的清单优先补上。
+    targets = yn_june_ids + yn_trip_report_ids() + tibet_ids
     seen, ordered = set(), []
     for rid in targets:
         if rid not in seen:
@@ -166,8 +207,9 @@ async def phase2_observations(client, tibet_ids: list[str]) -> None:
 async def main() -> None:
     log("=== trip-targeted fetch 开始 ===")
     async with BirdReportClient() as client:
+        yn_june_ids = await phase1_yunnan_june(client)
         tibet_ids = await phase1_tibet_checklists(client)
-        await phase2_observations(client, tibet_ids)
+        await phase2_observations(client, yn_june_ids, tibet_ids)
     log("=== 全部完成 ===")
 
 
