@@ -139,6 +139,22 @@ body {
   color: var(--ink-soft);
   line-height: 1.5;
 }
+.scrape .hoot {
+  margin-left: 6px;
+  border: 1.5px solid #c2553f;
+  background: #fff;
+  color: #c2553f;
+  border-radius: 20px;
+  padding: 1px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+}
+.scrape .hoot:hover {
+  background: #c2553f;
+  color: #fff;
+}
 
 /* ---- wireframe page shell ---- */
 .wf {

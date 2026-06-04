@@ -87,3 +87,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## 红角鸮叫声音效（补抓卡住提示音）
+
+- `frontend/public/sound/otus-sunia.{mp3,ogg}` — 红角鸮 (Oriental Scops Owl,
+  *Otus sunia*) 鸣叫，源自 Wikimedia Commons 文件 `Otus sunia.ogg`
+  (https://commons.wikimedia.org/wiki/File:Otus_sunia.ogg)。
+- 授权：**Public Domain**（作者 Raghu / User:Raghu.kuttan，own work）。mp3 由 ogg
+  转码（trim 8s + fade out），仅作前端「补抓卡住」提示音。
