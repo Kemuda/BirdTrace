@@ -106,39 +106,41 @@ def export_bar_chart(province: str, taxon: str) -> Path:
     return dst
 
 
-PROVINCE_BUNDLE_SQL_TOTALS = """
-SELECT strftime('%m', start_time) AS m, COUNT(*) AS cnt
-FROM checklists WHERE province = :province GROUP BY m
-"""
+def _bundle(conn: sqlite3.Connection, province: str,
+            districts: tuple[str, ...] = ()) -> dict:
+    """Month-by-month report count per species for a location.
 
-PROVINCE_BUNDLE_SQL_SPECIES = """
-SELECT o.taxon_name,
-       o.latin_name,
-       strftime('%m', c.start_time)      AS m,
-       COUNT(DISTINCT c.report_id)        AS cnt
-FROM checklists c
-JOIN observations o ON c.report_id = o.report_id
-WHERE c.province = :province AND o.taxon_name IS NOT NULL
-GROUP BY o.taxon_name, m
-"""
-
-
-def province_bundle(conn: sqlite3.Connection, province: str) -> dict:
-    """Return every species' month-by-month report count for a province.
-
-    The frontend computes `frequency_pct = species[i].monthly[m] /
-    total_reports[m] * 100` on the fly. One file per province scales much
-    better than one per (province, species) pair, and lets the UI
-    autocomplete + chart any species without re-fetching.
+    `districts` empty -> whole province (the legacy province bundle).
+    Non-empty -> restrict to those `district` values (trip-stop granularity).
+    Same LEFT-JOIN frequency口径 as the Bar Chart: `total_reports[m]` is the
+    sampling effort (denominator), `species[i].monthly[m]` the numerator, so a
+    month with checklists but no detail still reports `0 / total` honestly.
+    The frontend computes `frequency_pct = monthly[m] / total_reports[m] * 100`.
     """
     months = [f"{m:02d}" for m in range(1, 13)]
+    params: dict = {"province": province}
+    where_dist = ""
+    if districts:
+        placeholders = ",".join(f":d{i}" for i in range(len(districts)))
+        where_dist = f" AND district IN ({placeholders})"
+        params.update({f"d{i}": d for i, d in enumerate(districts)})
+
     totals_by_month = {
-        m: cnt for m, cnt in
-        conn.execute(PROVINCE_BUNDLE_SQL_TOTALS, {"province": province})
+        m: cnt for m, cnt in conn.execute(
+            "SELECT strftime('%m', start_time) AS m, COUNT(*) AS cnt "
+            "FROM checklists WHERE province = :province" + where_dist + " GROUP BY m",
+            params,
+        )
     }
     species_acc: dict[str, dict] = {}
     for taxon, latin, m, cnt in conn.execute(
-        PROVINCE_BUNDLE_SQL_SPECIES, {"province": province}
+        "SELECT o.taxon_name, o.latin_name, strftime('%m', c.start_time) AS m, "
+        "COUNT(DISTINCT c.report_id) AS cnt "
+        "FROM checklists c JOIN observations o ON c.report_id = o.report_id "
+        "WHERE c.province = :province AND o.taxon_name IS NOT NULL"
+        + where_dist.replace(" AND district", " AND c.district")
+        + " GROUP BY o.taxon_name, m",
+        params,
     ):
         entry = species_acc.setdefault(
             taxon, {"name": taxon, "latin_name": latin, "monthly": {x: 0 for x in months}}
@@ -159,6 +161,11 @@ def province_bundle(conn: sqlite3.Connection, province: str) -> dict:
     }
 
 
+def province_bundle(conn: sqlite3.Connection, province: str) -> dict:
+    """Whole-province species bundle (one file per province)."""
+    return _bundle(conn, province)
+
+
 def export_province_bundle(province: str) -> Path:
     with connect() as conn:
         bundle = province_bundle(conn, province)
@@ -168,6 +175,91 @@ def export_province_bundle(province: str) -> Path:
     return dst
 
 
+# --- Trip bundle (MVP: 行程驱动「时间+地点→鸟种」) --------------------------
+# Itinerary stops in chronological order, mapped to birdreport 省/区县.
+# See docs/itinerary-june.md. `districts` empty -> whole province (used where we
+# can't resolve finer, e.g. 西藏 which is 0-coverage). `month` = trip month, used
+# to rank the species list and judge sample honesty.
+TRIP_MONTH = "06"
+THIN_SAMPLE = 15  # N < THIN_SAMPLE -> flag as 样本薄 (PRD 数据诚实性)
+
+TRIP_STOPS = [
+    {"id": "lijiang-yulong", "label": "丽江 · 玉龙雪山/古城", "dates": "6/9–11",
+     "province": "云南", "districts": ("古城区", "玉龙纳西族自治县")},
+    {"id": "shangri-la", "label": "香格里拉 · 独克宗/普达措", "dates": "6/11–12, 14",
+     "province": "云南", "districts": ("香格里拉市",)},
+    {"id": "deqin-meili", "label": "德钦 · 梅里/雾浓顶", "dates": "6/12–13",
+     "province": "云南", "districts": ("德钦县",)},
+    {"id": "lhasa", "label": "拉萨 · 拉萨河谷", "dates": "6/14–15",
+     "province": "西藏", "districts": ()},
+    {"id": "shigatse", "label": "日喀则 · 江孜/萨嘎/仲巴", "dates": "6/15–16",
+     "province": "西藏", "districts": ()},
+    {"id": "manasarovar", "label": "玛旁雍错/冈仁波齐转山", "dates": "6/17–19",
+     "province": "西藏", "districts": ()},
+    {"id": "zanda", "label": "扎达土林 · 古格", "dates": "6/20–21",
+     "province": "西藏", "districts": ()},
+]
+
+
+def trip_stop_bundle(conn: sqlite3.Connection, stop: dict) -> dict:
+    """Build one stop's bundle + honesty metadata for the trip month."""
+    bundle = _bundle(conn, stop["province"], stop["districts"])
+    mi = int(TRIP_MONTH) - 1
+    total = bundle["total_reports"][mi]
+    # Species reported in the trip month, ranked by report count desc.
+    month_species = [
+        {
+            "name": s["name"],
+            "latin_name": s["latin_name"],
+            "reports": s["monthly"][mi],
+            "frequency_pct": round(100.0 * s["monthly"][mi] / total, 1) if total else 0.0,
+        }
+        for s in bundle["species"] if s["monthly"][mi] > 0
+    ]
+    month_species.sort(key=lambda x: (-x["reports"], x["name"]))
+    status = "none" if total == 0 else ("thin" if total < THIN_SAMPLE else "ok")
+    return {
+        **{k: stop[k] for k in ("id", "label", "dates", "province")},
+        "districts": list(stop["districts"]),
+        "trip_month": TRIP_MONTH,
+        "total_reports_month": total,
+        "species_count_month": len(month_species),
+        "data_status": status,          # none | thin | ok
+        "month_species": month_species,  # ranked, trip-month only
+        "total_reports": bundle["total_reports"],  # 12-mo, for Bar Chart reuse
+        "species": bundle["species"],              # 12-mo, full detail
+    }
+
+
+def export_trip() -> list[Path]:
+    """Write one bundle per trip stop + an ordered manifest."""
+    out: list[Path] = []
+    trip_dir = OUT_DIR / "trip"
+    trip_dir.mkdir(parents=True, exist_ok=True)
+    manifest = []
+    with connect() as conn:
+        for stop in TRIP_STOPS:
+            b = trip_stop_bundle(conn, stop)
+            dst = trip_dir / f"{b['id']}.json"
+            dst.write_text(json.dumps(b, ensure_ascii=False, indent=2), encoding="utf-8")
+            out.append(dst)
+            manifest.append({
+                "id": b["id"], "label": b["label"], "dates": b["dates"],
+                "province": b["province"], "districts": b["districts"],
+                "total_reports_month": b["total_reports_month"],
+                "species_count_month": b["species_count_month"],
+                "data_status": b["data_status"],
+            })
+    man_dst = trip_dir / "manifest.json"
+    man_dst.write_text(
+        json.dumps({"trip_month": TRIP_MONTH, "stops": manifest},
+                   ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    out.append(man_dst)
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bar-chart", nargs=2, metavar=("PROVINCE", "TAXON"),
@@ -175,6 +267,9 @@ def main() -> None:
     parser.add_argument("--province", metavar="PROVINCE",
                         help="export the whole-province species bundle (preferred — "
                              "lets the frontend chart any species without re-export)")
+    parser.add_argument("--trip", action="store_true",
+                        help="export per-stop trip bundles + manifest (MVP 名录页: "
+                             "地点+时间→鸟种, see docs/mvp-trip.md)")
     args = parser.parse_args()
 
     out = export_provinces_summary()
@@ -201,6 +296,13 @@ def main() -> None:
             return
         out = export_province_bundle(args.province)
         print(f"wrote {out}")
+
+    if args.trip:
+        if not DB_PATH.exists():
+            print(f"skipping trip export: {DB_PATH} not built yet")
+            return
+        for p in export_trip():
+            print(f"wrote {p}")
 
 
 if __name__ == "__main__":

@@ -21,18 +21,17 @@
 | 云南 6/12-13 | 德钦（梅里/雾浓顶/飞来寺） | 6 月 3 份，**1 份有物种** |
 | 西藏 6/14-22 | 拉萨/日喀则/玛旁雍错/冈仁波齐/扎达 | **DB 完全没有，从零抓** |
 
-- [~] **`fetch_trip.py` 定向抓取（后台跑中，task bljs4ffhz）**：① 西藏 checklist（6 月优先 + recent sweep）② 云南行程区 5-7 月 observation（6 月优先）。带 captcha 冷却自动重试，3h deadline 兜底
-  - [ ] 确认西藏源站可行性（尤其偏远阿里：玛旁雍错/扎达/仲巴源站可能也稀疏）
-  - [ ] 抓完 `load_checklists.py`（西藏会自动归一化省名）
-- [ ] **export 支持地点粒度**：现在 `export_json.py` 只按省聚合（`WHERE province=`）。需加按 `city/district/point_name` 过滤的导出（数据本就在表里，SQL 加 WHERE 即可），前端才能查「玉龙雪山 6 月有什么鸟」
+- [x] **`fetch_trip.py` 定向抓取（task bljs4ffhz 已结束）**：跑完了，但**西藏一份都没抓到** —— `data/raw/checklists/西藏/` 是空目录，Phase1 建了文件夹没写任何文件；云南行程区 observation 也没新增（raw 仍 79 份）。说明 birdreport.cn 西藏段要么源站零覆盖、要么全程被 captcha 挡死。**结论：西藏段 MVP 无数据，名录页只能诚实显示「该段暂无记录」。**
+  - [x] ~~确认西藏源站可行性~~ → 抓取层已证明拿不到；要补只能换 cookie 登录态重试（见 Backlog captcha B/C），否则接受西藏段空白
+- [x] **export 支持地点粒度**（2026-06-04）：`export_json.py` 加 `--trip`。把旧 `province_bundle` 泛化成 `_bundle(province, districts)`（districts 空=整省，旧省级导出零回归）。按 `docs/itinerary-june.md` 把 7 个行程停留点映射到省/区县，每点导出 `frontend/public/data/trip/<id>.json`（行程月 ranked 物种清单 + 12 月明细复用 Bar Chart 口径）+ `trip/manifest.json`。**自带数据诚实性 `data_status` = none/thin(N<15)/ok**。实测：玉龙 thin(2 报告/42 种)、香格里拉 thin(1/17)、德钦 thin(1/3)、西藏 4 段全 none
 - [ ] 多省支持：export / 前端能切云南↔西藏
 
 ### 前端 / 产品（等线框图）
 
-- [ ] **行程视图**：按行程把停留点排成时间线，每点给该月物种清单 —— 等 Amber 的线框图再定交互
-- [ ] 组合 1 名录页（地点+时间→物种清单，MVP 核心；当前只有组合 2 Bar Chart）
+- [ ] **行程视图**：按行程把停留点排成时间线，每点给该月物种清单 —— **后端数据已就位**（`trip/manifest.json` + 7 个 `trip/<id>.json`），等 Amber 的线框图定交互即可接
+- [ ] 组合 1 名录页（地点+时间→物种清单，MVP 核心；当前只有组合 2 Bar Chart）—— 数据用 `trip/<id>.json` 的 `month_species`（已 ranked）
 - [ ] 统一三槽查询条（地点 / 时间 / 物种，留空即提问）
-- [ ] 数据诚实性：N<15 灰化、显示 total_reports（行程区样本薄，这条尤其重要）
+- [ ] 数据诚实性：N<15 灰化、显示 total_reports（行程区样本薄，这条尤其重要）—— 后端已给 `data_status`（none/thin/ok）+ `total_reports_month`，前端直接读
 
 ---
 
