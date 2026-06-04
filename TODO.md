@@ -26,14 +26,19 @@
   - [x] 西藏 660 份 checklist 已 `load_checklists.py` 入库（自动归一化「西藏自治区」→「西藏」）
   - [~] **物种明细后台抓中**（task bc6sraa4c，690 个待抓，~3s/个 + captcha 冷却）：云南行程区 + 全西藏报告的 observation。抓完再 load + 重导出
 - [x] **export 支持地点粒度**（2026-06-04）：`export_json.py` 加 `--trip`。把旧 `province_bundle` 泛化成 `_bundle(province, districts, city)`：区县 > 市/地区 > 整省 三级过滤（省级旧导出零回归，已验证 312 种/月度计数不变）。按 `docs/itinerary-june.md` 把 7 个行程停留点映射到省/市/区县（西藏粒度按真实覆盖定：拉萨/日喀则用市级，阿里转山/扎达用区县），每点导出 `trip/<id>.json`（行程月 ranked 物种 + 12 月明细复用 Bar Chart 口径）+ `trip/manifest.json`。**自带数据诚实性 `data_status` = none/thin(N<15)/ok + `grain`**。当前实测（物种待 observation 抓完）：拉萨 6 月 17 报告 ok、日喀则 7 thin、玉龙 thin(2/42)、香格里拉 thin(1/17)、德钦 thin(1/3)、普兰 1、札达 0(none)
-- [ ] 多省支持：export / 前端能切云南↔西藏
+- [x] 多省支持：export 已能导任意省（`--province 西藏` 已跑）；前端「何时去」页省份下拉切云南↔西藏
 
-### 前端 / 产品（等线框图）
+### 前端 / 产品（线框图已到，2026-06-04 搭完三页骨架）
 
-- [ ] **行程视图**：按行程把停留点排成时间线，每点给该月物种清单 —— **后端数据已就位**（`trip/manifest.json` + 7 个 `trip/<id>.json`），等 Amber 的线框图定交互即可接
-- [ ] 组合 1 名录页（地点+时间→物种清单，MVP 核心；当前只有组合 2 Bar Chart）—— 数据用 `trip/<id>.json` 的 `month_species`（已 ranked）
-- [ ] 统一三槽查询条（地点 / 时间 / 物种，留空即提问）
-- [ ] 数据诚实性：N<15 灰化、显示 total_reports（行程区样本薄，这条尤其重要）—— 后端已给 `data_status`（none/thin/ok）+ `total_reports_month`，前端直接读
+按 Amber「Explore 线框」重写前端（纸感风格 + 统一三槽查询条，commit c491521）：
+- [x] **统一三槽查询条**（地点/时间/鸟种，留空那槽＝本页答案）
+- [x] **组合 1 名录页**（MVP 核心，地+时→鸟）：完整接 `trip/<id>.json` 的 `month_species`，频率三档分层 + 火花线（全年节律）+ 导出鸟单
+- [x] **组合 2 何时去**（地+鸟→时）：纸感柱图 + 最佳窗口高亮 + 样本<15 斜纹柱，接 province bundle
+- [x] **数据诚实性**：名录页用 `data_status`（none 空态 / thin 黄条「样本薄」/ ok）+ `total_reports_month`；柱图斜纹标 N<15
+- [ ] **行程视图**（把 7 个停留点排成时间线，每点一张迷你卡）：当前名录页是「单点下拉切换」，时间线编排还没做 —— 下一步
+- [ ] 季节速读现在是事实模板（「6 月共报告 N 种」），**AI 自然语言摘要**仍在 Backlog
+- [ ] 名录页「在/走」迁徙状态列：等迁徙状态数据层（Backlog）
+- [ ] slider「晚两周/早两周」微调：线框有，未实现
 
 ---
 
