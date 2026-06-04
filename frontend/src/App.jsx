@@ -1,190 +1,106 @@
 import { useEffect, useState } from "react";
-import BarChart from "./components/BarChart.jsx";
-import { mockBarChart, PROVINCES as FALLBACK_PROVINCES } from "./mocks/barChart.js";
+import PageList from "./pages/PageList.jsx";
+import PageChart from "./pages/PageChart.jsx";
+import PageMap from "./pages/PageMap.jsx";
 
-const TAXON_DATALIST_ID = "taxon-options";
+const TABS = [
+  { id: "list", name: "看什么", combo: "地+时→鸟" },
+  { id: "chart", name: "何时去", combo: "地+鸟→时" },
+  { id: "map", name: "去哪看", combo: "时+鸟→地" },
+];
+
+const VALID = new Set(["list", "chart", "map"]);
+const initialPage = () => {
+  const p = new URLSearchParams(window.location.search).get("p");
+  return VALID.has(p) ? p : "list";
+};
 
 export default function App() {
-  const [provinces, setProvinces] = useState(FALLBACK_PROVINCES);
-  const [taxa, setTaxa] = useState([]);
-  const [province, setProvince] = useState("云南");
-  const [taxon, setTaxon] = useState("黑颈鹤");
-  const [data, setData] = useState(mockBarChart);
-  const [source, setSource] = useState("mock");
-  const [loading, setLoading] = useState(false);
-  const [provincesStats, setProvincesStats] = useState(null);
-  const [provinceBundle, setProvinceBundle] = useState(null);
+  const [page, setPage] = useState(initialPage);
 
-  // Hydrate dropdowns from static exports. Both are optional — if a file
-  // hasn't been generated yet (e.g. taxon_list.json before the user runs
-  // fetch_taxon_list.py), keep using the mock fallback.
+  // 共享数据：行程停留点 / 省份名 / 物种名录
+  const [stops, setStops] = useState([]);
+  const [stopId, setStopId] = useState("");
+  const [provinces, setProvinces] = useState(["云南", "西藏"]);
+  const [taxa, setTaxa] = useState([]);
+
   useEffect(() => {
     (async () => {
       try {
-        const resp = await fetch("/data/provinces_summary.json");
-        if (resp.ok) {
-          const rows = await resp.json();
-          if (Array.isArray(rows) && rows.length) {
-            setProvincesStats(rows);
-            setProvinces(rows.map((r) => r.name).filter(Boolean));
+        const r = await fetch("/data/trip/manifest.json");
+        if (r.ok) {
+          const m = await r.json();
+          if (Array.isArray(m.stops) && m.stops.length) {
+            setStops(m.stops);
+            // 默认选第一个有数据的停留点，避免一进来就是空页
+            const firstWithData = m.stops.find((s) => s.data_status !== "none");
+            setStopId((firstWithData || m.stops[0]).id);
           }
         }
-      } catch { /* keep fallback */ }
+      } catch {
+        /* 无 manifest 时名录页自会显示空态 */
+      }
       try {
-        const resp = await fetch("/data/taxon_list.json");
-        if (resp.ok) {
-          const rows = await resp.json();
+        const r = await fetch("/data/provinces_summary.json");
+        if (r.ok) {
+          const rows = await r.json();
+          if (Array.isArray(rows) && rows.length) {
+            const names = rows.map((x) => x.name).filter(Boolean);
+            if (names.length) setProvinces(names);
+          }
+        }
+      } catch {
+        /* keep fallback */
+      }
+      try {
+        const r = await fetch("/data/taxon_list.json");
+        if (r.ok) {
+          const rows = await r.json();
           if (Array.isArray(rows)) setTaxa(rows);
         }
-      } catch { /* leave taxa empty */ }
+      } catch {
+        /* leave empty */
+      }
     })();
   }, []);
 
-  // Pull in the whole-province bundle whenever the user switches province.
-  // One file holds every species' monthly counts, so subsequent species
-  // changes are instant and never re-fetch.
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const resp = await fetch(`/data/province/${encodeURIComponent(province)}.json`);
-        if (!resp.ok) {
-          if (alive) setProvinceBundle(null);
-          return;
-        }
-        const bundle = await resp.json();
-        if (alive) setProvinceBundle(bundle);
-      } catch {
-        if (alive) setProvinceBundle(null);
-      }
-    })();
-    return () => { alive = false; };
-  }, [province]);
-
-  function _barFromBundle(bundle, name) {
-    const species = bundle.species.find((s) => s.name === name);
-    if (!species) return null;
-    return bundle.total_reports.map((total, i) => {
-      const m = String(i + 1).padStart(2, "0");
-      const withSp = species.monthly[i] || 0;
-      return {
-        month: m,
-        reports_with_species: withSp,
-        total_reports: total,
-        frequency_pct: total ? Math.round((withSp / total) * 1000) / 10 : 0,
-      };
-    });
-  }
-
-  async function load() {
-    setLoading(true);
-    try {
-      if (provinceBundle) {
-        const rows = _barFromBundle(provinceBundle, taxon);
-        if (rows) {
-          setData(rows);
-          setSource("real");
-          return;
-        }
-      }
-      const url = `/data/bar_chart/${encodeURIComponent(province)}__${encodeURIComponent(taxon)}.json`;
-      const resp = await fetch(url);
-      if (resp.ok) {
-        setData(await resp.json());
-        setSource("real");
-      } else {
-        setData(mockBarChart);
-        setSource("mock");
-      }
-    } catch {
-      setData(mockBarChart);
-      setSource("mock");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const provinceMeta = provincesStats?.find((r) => r.name === province);
-
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="max-w-4xl mx-auto p-6">
-        <header className="mb-6">
-          <h1 className="text-2xl font-semibold">BirdTrace</h1>
-          <p className="text-slate-600 text-sm mt-1">
-            中国观鸟记录中心数据探索 · 12 个月出现频率柱状图
-          </p>
-        </header>
-
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 mb-4">
-          <div className="flex flex-wrap gap-3 items-end">
-            <label className="flex flex-col text-sm">
-              <span className="text-slate-600 mb-1">省份</span>
-              <select
-                value={province}
-                onChange={(e) => setProvince(e.target.value)}
-                className="border border-slate-300 rounded px-2 py-1 min-w-32"
-              >
-                {provinces.map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col text-sm">
-              <span className="text-slate-600 mb-1">物种（中文名）</span>
-              <input
-                value={taxon}
-                onChange={(e) => setTaxon(e.target.value)}
-                list={taxa.length ? TAXON_DATALIST_ID : undefined}
-                className="border border-slate-300 rounded px-2 py-1 min-w-48"
-                placeholder={taxa.length ? "" : "输入鸟名（暂无名录可补全）"}
-              />
-              {taxa.length ? (
-                <datalist id={TAXON_DATALIST_ID}>
-                  {taxa.slice(0, 1500).map((t) => (
-                    <option key={t.id ?? t.name} value={t.name}>
-                      {t.latinname || ""}
-                    </option>
-                  ))}
-                </datalist>
-              ) : null}
-            </label>
-            <button
-              onClick={load}
-              disabled={loading}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white px-4 py-1.5 rounded"
-            >
-              {loading ? "加载中…" : "查看"}
-            </button>
-            <span className={`text-xs px-2 py-1 rounded ${source === "real" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>
-              数据源：{source === "real" ? "本地导出" : "示例数据"}
-            </span>
-          </div>
+    <div className="app">
+      <div className="app-head">
+        <div>
+          <h1>BirdTrace</h1>
+          <div className="sub">行程驱动的「时间 + 地点 → 鸟种」· 中国观鸟记录中心数据</div>
         </div>
+      </div>
 
-        {provinceMeta ? (
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 px-4 py-2 mb-4 text-sm text-slate-600">
-            <span className="font-medium text-slate-900">{provinceMeta.name}</span>
-            <span className="ml-3">鸟种 {provinceMeta.value ?? "?"}</span>
-            <span className="ml-3">报告 {provinceMeta.report ?? "?"}</span>
-            <span className="ml-3">记录 {provinceMeta.record ?? "?"}</span>
-          </div>
-        ) : null}
+      <div className="tabs">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            className={"tab" + (page === t.id ? " on" : "")}
+            onClick={() => {
+              setPage(t.id);
+              const u = new URL(window.location);
+              u.searchParams.set("p", t.id);
+              window.history.replaceState({}, "", u);
+            }}
+          >
+            {t.name}
+            <span className="combo">{t.combo}</span>
+          </button>
+        ))}
+      </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
-          <h2 className="text-base font-medium mb-2">
-            {province} · {taxon}
-          </h2>
-          <BarChart data={data} />
-        </div>
+      {page === "list" && <PageList stops={stops} stopId={stopId} onStop={setStopId} />}
+      {page === "chart" && <PageChart provinces={provinces} taxa={taxa} />}
+      {page === "map" && <PageMap />}
 
-        <footer className="text-xs text-slate-500 mt-6">
-          数据来源：
-          <a href="https://birdreport.cn" className="underline ml-1" target="_blank" rel="noreferrer">
-            中国观鸟记录中心
-          </a>
-          。本项目为非官方探索界面。
-        </footer>
+      <div className="foot">
+        数据来源：
+        <a href="https://birdreport.cn" target="_blank" rel="noreferrer">
+          中国观鸟记录中心
+        </a>
+        。非官方探索界面 · 样本薄处已诚实标注，不假装权威。
       </div>
     </div>
   );
