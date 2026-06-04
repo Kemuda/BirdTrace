@@ -80,9 +80,13 @@ def _parse_loc(location: str | None):
         return None, None
 
 
-async def _get(client, rid):
+async def _get(client, rid, heartbeat=None):
     """Return (data|None, captcha_hits_this_call). Handles captcha (reset+retry)
-    AND network blips (timeout/transport — retry then skip, never crash the run)."""
+    AND network blips (timeout/transport — retry then skip, never crash the run).
+
+    heartbeat(captcha_so_far) 在每次验证码冷却时被调用：让状态文件在 _get 内部的
+    重试循环*进行中*就能反映「卡住了」，而不是等 40 次冷却耗完(约 5 分钟)才写一次。
+    没它的话，前端那条 bar 撞墙后要闷 5 分钟才弹窗+叫；有它，约 90 秒就响。"""
     cd = net = captcha = 0
     while True:
         try:
@@ -93,6 +97,8 @@ async def _get(client, rid):
                 cd += 1
                 captcha += 1
                 log(f"  captcha {rid[:8]} → 重置会话+冷却 ({cd}/{MAX_COOLDOWNS})")
+                if heartbeat:
+                    heartbeat(captcha)
                 await client.reset()
                 await asyncio.sleep(COOLDOWN)
                 continue
@@ -127,10 +133,17 @@ async def main() -> None:
     ok = miss = captcha_total = consec = 0
     last_progress = time.time()
     total = len(targets)
+
+    def heartbeat(captcha_in_progress):
+        # 单条报告卡在验证码冷却循环里时调用：刷新 idle / captcha 计数，让前端
+        # 在「卡住」当下就弹窗 + 红角鸮叫（约 90s idle 触发 stalled），而非 5 分钟后。
+        write_status(fetched=ok, total=total, captcha=captcha_total + captcha_in_progress,
+                     consec=consec + captcha_in_progress, last_progress=last_progress, done=False)
+
     write_status(fetched=0, total=total, captcha=0, consec=0, last_progress=last_progress, done=(total == 0))
     async with BirdReportClient() as c:
         for i, rid in enumerate(targets, 1):
-            d, cap = await _get(c, rid)
+            d, cap = await _get(c, rid, heartbeat)
             captcha_total += cap
             consec = consec + cap if cap else (0 if isinstance(d, dict) else consec)
             if not isinstance(d, dict):
