@@ -4,28 +4,39 @@
 
 ---
 
-## 本轮：「看什么」issue list（2026-06-04 下午）
+## 本轮：「看什么」issue list 全清 + 数据补全（2026-06-04，PR #4）
 
-Amber 给的「看什么」issue list，分 4 批做完 + 1 项调研。
+### ✅ 已完成 —— 前端 / 产品
+- [x] Tab 改序（看什么→去哪看→何时去，含排版）；「行程驱动…」移到看什么页描述(#1)、去大框重复标签(#9)
+- [x] 地点补省·市 `region`，加 丽江市(全市)/香格里拉·高山植物园/冈仁波齐(#2)
+- [x] 报告列表(#3)：export 每点加 `reports[]`，前端 ReportList 弹窗「N 份报告」可点→展开鸟种，「明细待抓」诚实标注
+- [x] 目标鸟种/笔记/已学习/已见过(#3.1–3.4)：`useMarks` localStorage(按中文名)、行内 chip+笔记编辑、
+  「我的鸟种」聚合弹窗 + 一键备份导出/导入、「只看目标」筛选；**记笔记自动标已学习**
+- [x] 频率算法说明写进 UI(#4) + 明细待抓导致偏低的诚实提示(#4.1)；年份透明(#8) `report_years`(2024+2025)
+- [x] **「在哪里见过」反查**（鸟种→地点聚合，`species_locations.json`）；该入口移到频率旁（属数据非个人标记）
+- [x] 后台补抓进度条 + **卡住红角鸮叫声(公有领域音频)** + 弹窗提醒；favicon 🦉 + 标题
+- [x] `design/birdtrace-mockup.html` 可编辑 UI 草图
 
-- [x] **批1**：Tab 改序（看什么→去哪看→何时去，含排版）；「行程驱动…」从产品副标题移到看什么页描述(#1)、
-  去大框重复标签(#9)；英文 common name 替拉丁名(#5，来源懂鸟 `en` 字段 96%，**注意 ebird ref 的 comName 是中文不能用**)；
-  去页脚/legend 冗余字、按钮改「导出目标鸟单」；地点补省·市 `region`，加丽江市(全市)/香格里拉·高山植物园/冈仁波齐(#2)
-- [x] **批2**：报告列表(#3)——export 每点加 `reports[]`(serial/time/user/point/声明种数+明细+has_detail)；
-  前端 ReportList 弹窗「N 份报告」可点→展开鸟种；「明细待抓」诚实标注
-- [x] **批3**：目标鸟种/笔记/已学习/已见过(#3.1–3.4)——`useMarks` localStorage(按中文名)、行内 chip+笔记编辑、
-  「我的鸟种」聚合弹窗 + **一键备份导出/导入**(防 localStorage 被清)、「只看目标」筛选
-- [x] **批4**：频率算法说明写进 UI(#4)「频率=含该鸟报告数÷总报告数×100，同 eBird 口径」+ 明细待抓导致偏低的诚实提示(#4.1)；
-  年份透明(#8)`report_years`，现已合并 2024+2025 6月
-- [x] **数据补抓(#7,#4.1 根源)**：`fetch_trip.py` 后台补 6 月鸟种明细（原 1264/1396 缺明细）。加 `scrape_status.py`
-  实时进度 + 前端进度条（验证码自动换会话重试、**不需人工解**；卡住才告警）。已验证补抓是**真数据**
-  （白马雪山 0→34 种；独克宗红嘴山鸦 33.3%→83.3%）。⚠️ 后台进程未必跑完 628 份——撞 505 越来越频，
-  **可重跑 `fetch_trip.py` 续抓**，再 `load_checklists.py` + `export_json.py --trip`
-- [x] **eBird 路线A 已做(#3.4)**：Amber 给了 `ebird_world_year_list.csv`。前端「我的鸟种」加「导入 eBird CSV」按钮，
-  按中文名(+学名桥接 `ebird_sci_to_cn.json` 兜底)标「已见过」。纯前端解析、存 localStorage、不上传。
-  实测她 52 行全标上、31 种出现在行程名录。eBird 括号别名(白骨顶(骨顶鸡))靠学名桥接纠正
-- [ ] **eBird 路线B(#6)**：用 eBird 热点频率补 birdreport 薄样本——较重、需 API key/条款核查，
-  见 `docs/ebird-integration-research-prompt.md`，等 Amber 决定
+### ✅ 已完成 —— eBird（#6 / #3.4）
+- [x] **路线A**：导入 eBird CSV 标「已见过」（学名桥接 `ebird_sci_to_cn.json` 兜底）+ 首次自动套用 seed（`build_marks_seed.py`）
+- [ ] **路线B**：eBird 热点频率补薄样本——较重、需 API key/条款核查，见 `docs/ebird-integration-research-prompt.md`，待定
+
+### ✅ 已完成 —— 数据层
+- [x] **英文名(#5)**：改用 birdreport 自带 `englishname`（**100% 覆盖**），懂鸟 `en` 兜底。observations 加 `english_name` 列
+- [x] **鸟种明细补抓(#7,#4.1 根源)**：`fetch_trip.py` + `scrape_status.py` 实时进度。**865/865 全部抓完**
+  （白马雪山 0→34 种、独克宗 33.3%→83.3%，已验证真数据）
+- [x] **接口发现**：`/front/record/activity/search` 支持 `pointname`/`district`/`city` 服务端过滤
+  （虎跳峡其实 58 份、6 月真为 0）；坐标+`pointId` 在 `/front/activity/get`，**基本不撞墙**。加 `post_raw`/`probe_pointsearch.py`
+- [x] **坐标抓取**：`fetch_report_detail.py` 按城市抓 `/front/activity/get` → `lat/lng`(GCJ-02)/`point_id`/`address` 入库；
+  checklists 加 `point_id`/`address` 列。**修坑**：`load_checklists` 改 upsert，重导不再覆盖坐标
+- [x] 修 P2（本 PR review 提的）：续抓时把空终止页落盘当标记，避免每次重抓
+
+### ⏳ 进行中 / 📋 待办
+- [~] **坐标收尾**：日喀则坐标后台抓中 → 验证「同点多写法是否共享同一 pointId」(去重关键) → 再定是否扩到全行程
+- [ ] **reload + 重导出**：把日喀则坐标并进前端数据（等坐标抓完，避免锁库）
+- [ ] **5–7 月邻月兜底**：虎跳峡这种「6 月空」的点（机制 `pointname` 已确认）
+- [ ] **地图页 / 距离 / 我附近**：有坐标后才能做
+- [ ] **地点选择器架构**（省市县点树 + 行程作为数据对象 + 自建行程）：Amber 在想，未定
 
 ---
 
