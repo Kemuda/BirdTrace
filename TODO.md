@@ -24,7 +24,8 @@
 - [x] **西藏其实有数据 —— 之前抓空是 `fetch_trip.py` 的 bug，不是源站没数据**（2026-06-04，Amber 给了西藏报告列表 URL 才发现）：
   - 真相：Phase1 能抓到 660 份西藏 checklist；但 Phase2 的 `yn_trip_report_ids()` SQL 用 `%` 拼 IN 子句，同串里有 `strftime('%m',…)`，Python 把 `%m` 当格式符 **崩溃**，导致 observation 从来没抓成、且进程整个挂掉（第一次 task 看到的「空目录」是另一次赶上 captcha 窗口）。**已修**（改成字符串拼接）。
   - [x] 西藏 660 份 checklist 已 `load_checklists.py` 入库（自动归一化「西藏自治区」→「西藏」）
-  - [~] **物种明细后台抓中**（task bc6sraa4c，690 个待抓，~3s/个 + captcha 冷却）：云南行程区 + 全西藏报告的 observation。抓完再 load + 重导出
+  - [x] **captcha 真正修复**（commit 6da1af7）：505 封的是**会话/连接不是 IP**——撞 505 时 `client.reset()` 换新会话再试，不再死磕（人工浏览器解验证码本就没用，不同会话）。observation 稳定流入，无需人工。
+  - [~] **物种明细后台抓中**：obs 已 311 份，12/16 停留点有物种（玉龙雪山 6、普达措 44、拉萨 58、日喀则 98…）。偶有个别报告反复 505 跳过
 - [x] **export 支持地点粒度**（2026-06-04）：`export_json.py` 加 `--trip`。把旧 `province_bundle` 泛化成 `_bundle(province, districts, city)`：区县 > 市/地区 > 整省 三级过滤（省级旧导出零回归，已验证 312 种/月度计数不变）。按 `docs/itinerary-june.md` 把 7 个行程停留点映射到省/市/区县（西藏粒度按真实覆盖定：拉萨/日喀则用市级，阿里转山/扎达用区县），每点导出 `trip/<id>.json`（行程月 ranked 物种 + 12 月明细复用 Bar Chart 口径）+ `trip/manifest.json`。**自带数据诚实性 `data_status` = none/thin(N<15)/ok + `grain`**。当前实测（物种待 observation 抓完）：拉萨 6 月 17 报告 ok、日喀则 7 thin、玉龙 thin(2/42)、香格里拉 thin(1/17)、德钦 thin(1/3)、普兰 1、札达 0(none)
 - [x] 多省支持：export 已能导任意省（`--province 西藏` 已跑）；前端「何时去」页省份下拉切云南↔西藏
 
@@ -34,8 +35,11 @@
 - [x] **统一三槽查询条**（地点/时间/鸟种，留空那槽＝本页答案）
 - [x] **组合 1 名录页**（MVP 核心，地+时→鸟）：完整接 `trip/<id>.json` 的 `month_species`，频率三档分层 + 导出鸟单
 - [x] **地点拆到景点级**（云南）+ 西藏市/区县级（commit 11d9d55）
-- [x] **居留型标签替换火花线**（commit 7ecc8ee）：留鸟/夏候鸟/冬候鸟/旅鸟/不确定，从省级 12 月模式推断（`classify_seasonal`）。无现成数据源，是推断；西藏仅 6 月数据→多为不确定（诚实）
-- [x] **鸟名链接 eBird**：vendored commonBird 的 `ebird_sci_to_code.json`+ch4 修正到 `data/raw/refs/`，覆盖 99%
+- [~] ~~居留型标签~~：做过又撤（Amber：推断的非权威，先不展示）。`classify_seasonal` 留作 dormant，以后接权威居留型表/eBird S&T 再启用
+- [x] **每行三个外链 eBird/懂鸟/鸣声**（commit cec9a40）：
+  - eBird：commonBird `ebird_sci_to_code.json`+ch4 修正，覆盖 99%
+  - 懂鸟：从 dongniao.net/taxonomy.html 解析「中文名→编号」（11271 种）→ `data/raw/refs/dongniao_name_to_nd.json`
+  - 鸣声：Xeno-canto `species/{Genus-species}` 拉丁名直接拼，无需落地数据
 - [x] **组合 2 何时去**（地+鸟→时）：纸感柱图 + 最佳窗口高亮 + 样本<15 斜纹柱，接 province bundle
 - [x] **数据诚实性**：名录页 `data_status`（none 空态 / thin 黄条 / ok）；柱图斜纹标 N<15
 - [ ] **懂鸟链接**：需爬懂鸟分类表拿「中文名→编号」（commonBird 没有该编号），待 Amber 确认要不要做
