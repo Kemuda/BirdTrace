@@ -393,6 +393,61 @@ def _stop_grain(stop: dict) -> str:
     return "province"
 
 
+def _stop_reports(conn: sqlite3.Connection, stop: dict) -> list[dict]:
+    """Per-report rows for this stop in the trip month (报告列表页用，Amber #3).
+
+    Each row = one checklist: 编号(serial_id) / 时间 / 用户 / 地点(point_name) /
+    声明鸟种数(taxon_count) + 已抓到的鸟种明细。`has_detail` 区分「明细已抓」与
+    「只有清单数、明细待抓」—— 这正是独克宗 33.3% 偏低的原因（分母含未抓明细的报告）。
+    """
+    districts = stop.get("districts", ())
+    city = stop.get("city")
+    points = stop.get("points", ())
+    params: dict = {"province": stop["province"]}
+    params.update({f"d{i}": d for i, d in enumerate(districts)})
+    if city and not districts:
+        params["city"] = city
+    params.update({f"p{i}": f"%{p}%" for i, p in enumerate(points)})
+
+    rows = conn.execute(
+        "SELECT report_id, serial_id, start_time, username, point_name, taxon_count "
+        "FROM checklists WHERE province = :province"
+        + _filters("", districts, city, points)
+        + " AND strftime('%m', start_time) = '" + TRIP_MONTH + "'"
+        " ORDER BY start_time",
+        params,
+    ).fetchall()
+    if not rows:
+        return []
+
+    ids = [r[0] for r in rows]
+    by_report: dict[str, list] = {rid: [] for rid in ids}
+    ph = ",".join("?" * len(ids))
+    for rid, name, latin, cnt in conn.execute(
+        "SELECT report_id, taxon_name, latin_name, taxon_count FROM observations "
+        "WHERE report_id IN (" + ph + ") AND taxon_name IS NOT NULL",
+        ids,
+    ):
+        by_report.setdefault(rid, []).append(
+            {"name": name, "english_name": english_common(name), "count": cnt}
+        )
+
+    out = []
+    for rid, serial, t, user, point, declared in rows:
+        sp = sorted(by_report.get(rid, []), key=lambda x: x["name"])
+        out.append({
+            "report_id": rid,
+            "serial": serial,
+            "time": t,
+            "user": user,
+            "point_name": point,
+            "declared_count": declared,   # 观察者声明的鸟种数（清单元数据）
+            "species": sp,                # 已抓到的明细（可能为空 = 待抓）
+            "has_detail": bool(sp),
+        })
+    return out
+
+
 def trip_stop_bundle(conn: sqlite3.Connection, stop: dict) -> dict:
     """Build one stop's bundle + honesty metadata for the trip month.
 
@@ -428,6 +483,7 @@ def trip_stop_bundle(conn: sqlite3.Connection, stop: dict) -> dict:
         "total_reports_month": total,
         "species_count_month": len(month_species),
         "data_status": status,          # none | thin | ok
+        "reports": _stop_reports(conn, stop),  # 报告列表页（编号/时间/用户/地点/鸟种 + 明细）
         "month_species": month_species,  # ranked, trip-month only —— 前端唯一用到的
         # NB: 不再输出 12 月 `species`/`total_reports` 数组 —— 名录页只用
         # month_species，那两个大数组（每点全物种×12月）纯属冗余。「何时去」页用的是

@@ -74,11 +74,26 @@ def main() -> None:
     except Exception:
         running = False
 
-    # stalled: alive but no log movement for a while, or stuck on the gate
+    # stalled = NO NEW report fetched for STALL_SECONDS. Each success writes an
+    # obs file (no per-success log line), so growing obs_files == real progress.
+    # A single report retrying the captcha gate up to 40× is normal self-recovery,
+    # NOT a stall — so we key off obs_files growth, not the captcha counter.
+    now_epoch = time.time()
+    prev = {}
+    if OUT.exists():
+        try:
+            prev = json.loads(OUT.read_text(encoding="utf-8"))
+        except Exception:
+            prev = {}
+    if prev.get("obs_files") == obs_files and prev.get("_stuck_since"):
+        stuck_since = prev["_stuck_since"]          # unchanged → keep first-seen time
+    else:
+        stuck_since = now_epoch                     # grew (or first run) → reset clock
+    stalled = running and not done and (now_epoch - stuck_since) > STALL_SECONDS
+
     now = time.localtime()
     now_s = _secs(now.tm_hour, now.tm_min, now.tm_sec)
     idle = (now_s - last_ts) if (last_ts is not None and now_s >= last_ts) else 0
-    stalled = running and not done and (idle > STALL_SECONDS or consecutive_captcha >= 25)
 
     status = {
         "updated_at": time.strftime("%H:%M:%S"),
@@ -93,6 +108,7 @@ def main() -> None:
         "consecutive_captcha": consecutive_captcha,
         "stalled": stalled,
         "idle_seconds": idle,
+        "_stuck_since": stuck_since,
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")

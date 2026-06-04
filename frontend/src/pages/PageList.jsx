@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import QueryBar from "../components/QueryBar.jsx";
+import ReportList from "../components/ReportList.jsx";
 
 // 频率分层：几乎必见 / 有机会 / 撞大运·稀有。
 const TIERS = [
@@ -61,6 +62,7 @@ function Tier({ cls, name, hint, rows }) {
 export default function PageList({ stops, stopId, onStop }) {
   const [bundle, setBundle] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showReports, setShowReports] = useState(false);
 
   useEffect(() => {
     if (!stopId) return;
@@ -85,7 +87,17 @@ export default function PageList({ stops, stopId, onStop }) {
   const species = bundle?.month_species || [];
   const status = bundle?.data_status;
   const n = bundle?.total_reports_month ?? 0;
+  const reports = bundle?.reports || [];
   const stop = stops.find((s) => s.id === stopId);
+
+  // 可点的「N 份报告」→ 打开报告列表弹窗
+  const reportLink = reports.length ? (
+    <button type="button" className="rlink" onClick={() => setShowReports(true)}>
+      {n} 份报告
+    </button>
+  ) : (
+    `${n} 份报告`
+  );
 
   function exportList() {
     if (!species.length) return;
@@ -137,11 +149,13 @@ export default function PageList({ stops, stopId, onStop }) {
 
       <div className="meta">
         <div className={"trust" + (status === "thin" ? " warn" : "")}>
-          {status === "none"
-            ? "本地暂无该段报告"
-            : status === "thin"
-            ? `仅 ${n} 份报告 · 样本薄，频率仅供参考`
-            : `基于 ${n} 份报告 · 行程月`}
+          {status === "none" ? (
+            "本地暂无该段报告"
+          ) : status === "thin" ? (
+            <>仅 {reportLink} · 样本薄，频率仅供参考</>
+          ) : (
+            <>基于 {reportLink} · 行程月</>
+          )}
         </div>
       </div>
 
@@ -174,6 +188,14 @@ export default function PageList({ stops, stopId, onStop }) {
           ⤓ 导出目标鸟单
         </button>
       </div>
+
+      {showReports && (
+        <ReportList
+          label={stop?.label || stopId}
+          reports={reports}
+          onClose={() => setShowReports(false)}
+        />
+      )}
     </div>
   );
 }
