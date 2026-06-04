@@ -175,6 +175,34 @@ class BirdReportClient:
             return json.loads(_aes_decrypt(data))
         return data if data is not None else envelope
 
+    async def post_raw(self, path: str, params: dict[str, Any]) -> dict:
+        """Like post(), but return the full envelope with `data` decrypted under
+        `_records`. Lets callers read envelope-level fields (notably `count`, the
+        server-side filtered total) — useful for probing which `where` filters the
+        API honors before paging. Returns {"_records": [...]} for bare-list responses."""
+        plaintext = _format_plaintext(params)
+        body = self._rsa.encrypt(plaintext)
+        request_id = uuid.uuid4().hex
+        timestamp = str(int(time.time())) + "000"
+        sign = hashlib.md5(
+            (plaintext + request_id + timestamp).encode("utf-8")
+        ).hexdigest()
+        headers = {**DEFAULT_HEADERS, "requestId": request_id,
+                   "sign": sign, "timestamp": timestamp}
+        resp = await self._http.post(f"{BASE_URL}{path}", headers=headers, content=body)
+        resp.raise_for_status()
+        env = resp.json()
+        if isinstance(env, list):
+            return {"_records": env}
+        code = env.get("code")
+        if env.get("success") is False or (isinstance(code, int) and code != 0):
+            raise BirdReportError(f"{path} -> code={code} msg={env.get('msg')!r}",
+                                  code=code if isinstance(code, int) else None)
+        data = env.get("data")
+        recs = json.loads(_aes_decrypt(data)) if isinstance(data, str) and data else data
+        env["_records"] = recs if isinstance(recs, list) else []
+        return env
+
     async def search_checklists(
         self,
         province: str,
