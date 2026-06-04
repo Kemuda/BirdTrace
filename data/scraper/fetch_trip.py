@@ -94,6 +94,25 @@ async def _sweep_checklists(client, province: str, sweeps, out_dir: Path,
     out_dir.mkdir(parents=True, exist_ok=True)
     ids: list[str] = []
     for start, end, tag in sweeps:
+        # Idempotent restart: if this sweep's raw pages already exist, don't
+        # re-fetch (wasteful + risks a captcha BEFORE the valuable obs phase) —
+        # just re-read the report_ids out of the saved files.
+        existing = sorted(out_dir.glob(f"{tag}_*.json"))
+        if existing:
+            kept = 0
+            for f in existing:
+                for rec in _records(json.loads(f.read_text(encoding="utf-8"))):
+                    rid = rec.get("reportId") or rec.get("report_id")
+                    if not rid:
+                        continue
+                    if district_filter is not None:
+                        dn = rec.get("district_name") or rec.get("district")
+                        if dn not in district_filter:
+                            continue
+                    ids.append(rid)
+                    kept += 1
+            log(f"Phase1 {province} {tag}: 已有 {len(existing)} 页 raw，跳过抓取（{kept} 个 id）")
+            continue
         log(f"Phase1 {province} {tag}: 抓 checklist")
         kept = 0
         for page in range(1, max_pages + 1):
