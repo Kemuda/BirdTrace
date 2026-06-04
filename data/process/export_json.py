@@ -518,12 +518,52 @@ def export_ebird_bridge() -> Path:
     return dst
 
 
+def export_species_locations() -> Path:
+    """物种 -> 出现过的地点 聚合（Amber：「在哪里见过」反查，鸟种→地点）。
+
+    对每个中文名，列出 DB 里记录到它的所有地点（point_name，带省/市/区县），
+    各地点的报告数 + 出现月份。范围 = 我们已抓的数据（云南+西藏），前端会注明。
+    一份静态索引，前端点鸟种时按需加载一次。
+    """
+    rows = []
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT o.taxon_name, c.province, c.city, c.district, c.point_name, "
+            "       COUNT(DISTINCT c.report_id) AS reports, "
+            "       GROUP_CONCAT(DISTINCT strftime('%m', c.start_time)) AS months "
+            "FROM observations o JOIN checklists c ON o.report_id = c.report_id "
+            "WHERE o.taxon_name IS NOT NULL "
+            "GROUP BY o.taxon_name, c.province, c.city, c.district, c.point_name"
+        ).fetchall()
+
+    index: dict[str, dict] = {}
+    for name, prov, city, dist, point, reports, months in rows:
+        entry = index.setdefault(name, {"total_reports": 0, "locations": []})
+        entry["total_reports"] += reports
+        region = " · ".join([p for p in (prov, city, dist) if p])
+        mlist = sorted({int(m) for m in (months or "").split(",") if m})
+        entry["locations"].append({
+            "point": point or (dist or city or prov or "—"),
+            "region": region,
+            "reports": reports,
+            "months": mlist,
+        })
+    for entry in index.values():
+        entry["locations"].sort(key=lambda x: (-x["reports"], x["point"]))
+
+    dst = OUT_DIR / "species_locations.json"
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
+    return dst
+
+
 def export_trip() -> list[Path]:
     """Write one bundle per trip stop + an ordered manifest."""
     out: list[Path] = []
     trip_dir = OUT_DIR / "trip"
     trip_dir.mkdir(parents=True, exist_ok=True)
     out.append(export_ebird_bridge())
+    out.append(export_species_locations())
     manifest = []
     with connect() as conn:
         for stop in TRIP_STOPS:

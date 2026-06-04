@@ -40,6 +40,36 @@ export function useMarks() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
+  // 首次加载自动套用 eBird seed（marks_seed.json，由 build_marks_seed.py 生成）。
+  // 只套一次（按浏览器记 flag），之后你手动增删不会被它覆盖。
+  useEffect(() => {
+    const FLAG = "birdtrace_seed_v1";
+    if (localStorage.getItem(FLAG)) return;
+    let alive = true;
+    (async () => {
+      try {
+        const r = await fetch("/data/marks_seed.json", { cache: "no-store" });
+        if (r.ok && alive) {
+          const seed = await r.json();
+          setMarks((cur) => {
+            const next = { ...cur };
+            for (const [k, v] of Object.entries(seed || {})) {
+              next[k] = { ...BLANK, ...(next[k] || {}), ...v };
+            }
+            save(next);
+            return next;
+          });
+          localStorage.setItem(FLAG, "1");
+        }
+      } catch {
+        /* 没有 seed 文件就跳过 */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const apply = useCallback((name, patch) => {
     setMarks((cur) => {
       const entry = { ...BLANK, ...(cur[name] || {}), ...patch };

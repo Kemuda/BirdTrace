@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import QueryBar from "../components/QueryBar.jsx";
 import ReportList from "../components/ReportList.jsx";
 import TargetList from "../components/TargetList.jsx";
+import SpeciesLocations from "../components/SpeciesLocations.jsx";
 import { useMarks } from "../hooks/useMarks.js";
 
 // 频率分层：几乎必见 / 有机会 / 撞大运·稀有。
@@ -11,7 +12,7 @@ const TIERS = [
   { cls: "tier-rare", name: "撞大运 · 稀有", hint: "<20%", test: (f) => f < 20 },
 ];
 
-function SpRow({ d, mark, onToggle, onNote }) {
+function SpRow({ d, mark, onToggle, onNote, onWhere }) {
   const rare = d.frequency_pct < 20;
   const L = d.links || {};
   const m = mark || {};
@@ -61,6 +62,9 @@ function SpRow({ d, mark, onToggle, onNote }) {
           <button className={"chip" + (m.note ? " on" : "")} onClick={openNote}>
             ✎笔记
           </button>
+          <button className="chip" onClick={() => onWhere(d.name)}>
+            📍在哪见过
+          </button>
         </span>
         {editing ? (
           <div className="note-edit">
@@ -92,7 +96,7 @@ function SpRow({ d, mark, onToggle, onNote }) {
   );
 }
 
-function Tier({ cls, name, hint, rows, marks, onToggle, onNote }) {
+function Tier({ cls, name, hint, rows, marks, onToggle, onNote, onWhere }) {
   if (!rows.length) return null;
   return (
     <div className={"tier " + cls}>
@@ -105,7 +109,14 @@ function Tier({ cls, name, hint, rows, marks, onToggle, onNote }) {
         {name} <span className="ct">{hint} · {rows.length} 种</span>
       </div>
       {rows.map((d) => (
-        <SpRow key={d.name} d={d} mark={marks[d.name]} onToggle={onToggle} onNote={onNote} />
+        <SpRow
+          key={d.name}
+          d={d}
+          mark={marks[d.name]}
+          onToggle={onToggle}
+          onNote={onNote}
+          onWhere={onWhere}
+        />
       ))}
     </div>
   );
@@ -118,6 +129,7 @@ export default function PageList({ stops, stopId, onStop }) {
   const [showTargets, setShowTargets] = useState(false);
   const [onlyTarget, setOnlyTarget] = useState(false);
   const [showFreq, setShowFreq] = useState(false);
+  const [whereSpecies, setWhereSpecies] = useState(null);
   const { marks, toggle, setNote, importMarks } = useMarks();
 
   useEffect(() => {
@@ -293,6 +305,7 @@ export default function PageList({ stops, stopId, onStop }) {
             marks={marks}
             onToggle={toggle}
             onNote={setNote}
+            onWhere={setWhereSpecies}
           />
         ))
       )}
@@ -321,6 +334,10 @@ export default function PageList({ stops, stopId, onStop }) {
           importMarks={importMarks}
           onClose={() => setShowTargets(false)}
         />
+      )}
+
+      {whereSpecies && (
+        <SpeciesLocations name={whereSpecies} onClose={() => setWhereSpecies(null)} />
       )}
     </div>
   );
