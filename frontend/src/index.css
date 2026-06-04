@@ -85,6 +85,119 @@ body {
   margin-left: 6px;
 }
 
+/* ---- scrape progress banner ---- */
+.scrape {
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.scrape.stalled {
+  border-color: #c2553f;
+  background: #fbeee9;
+}
+.scrape.done {
+  border-color: var(--present);
+  background: #eef5ef;
+}
+.scrape.paused {
+  border-color: var(--hi-line);
+  background: #fff7e0;
+}
+.scrape.paused .sbar i {
+  background: var(--hi-line);
+}
+.scrape .srow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+.scrape .snum {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.scrape .sbar {
+  height: 6px;
+  border-radius: 4px;
+  background: var(--paper-2);
+  overflow: hidden;
+}
+.scrape .sbar i {
+  display: block;
+  height: 100%;
+  background: var(--hand);
+  transition: width 0.4s;
+}
+.scrape.done .sbar i {
+  background: var(--present);
+}
+.scrape.stalled .sbar i {
+  background: #c2553f;
+}
+.scrape .snote {
+  font-size: 11px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+.scrape .hoot {
+  margin-left: 6px;
+  border: 1.5px solid #c2553f;
+  background: #fff;
+  color: #c2553f;
+  border-radius: 20px;
+  padding: 1px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+}
+.scrape .hoot:hover {
+  background: #c2553f;
+  color: #fff;
+}
+
+/* 卡住提醒弹窗 */
+.owl-alert {
+  max-width: 380px;
+  border-color: #c2553f;
+}
+.owl-alert .modal-h {
+  color: #c2553f;
+}
+.owl-body {
+  display: flex;
+  gap: 12px;
+  padding: 16px 18px;
+  align-items: flex-start;
+}
+.owl-body .owl-ico {
+  font-size: 34px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.owl-body p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+.owl-body p b {
+  color: var(--ink);
+}
+.owl-act {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 18px 16px;
+}
+
 /* ---- wireframe page shell ---- */
 .wf {
   background: var(--paper);
@@ -113,6 +226,17 @@ body {
   border: 1.5px solid var(--line);
   border-radius: 20px;
   color: var(--ink-soft);
+}
+.wf-desc {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+}
+.region {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-top: -4px;
 }
 
 /* ---- query bar ---- */
@@ -220,6 +344,202 @@ body {
   background: #fff7e0;
 }
 
+/* ---- clickable "N 份报告" ---- */
+.rlink {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--hand);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+.rlink:hover {
+  color: var(--ink);
+}
+
+/* ---- report-list modal ---- */
+.modal-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(40, 38, 33, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 50;
+}
+.modal {
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 14px 40px rgba(40, 38, 33, 0.28);
+}
+.modal-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1.5px solid var(--line-soft);
+  font-size: 15px;
+}
+.modal-h .x {
+  border: none;
+  background: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.modal-note {
+  font-size: 11px;
+  color: var(--ink-soft);
+  padding: 8px 18px;
+  line-height: 1.5;
+  background: var(--paper-2);
+}
+.rl-head,
+.rl-row {
+  display: grid;
+  grid-template-columns: 84px 1fr 1.3fr 64px;
+  gap: 8px;
+  align-items: center;
+}
+.rl-head {
+  padding: 8px 18px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--line-soft);
+}
+.rl-head .r,
+.rl-row .r {
+  text-align: right;
+}
+.rl-body {
+  overflow-y: auto;
+}
+.rl-row {
+  padding: 9px 18px;
+  font-size: 12px;
+  cursor: pointer;
+  border-top: 1px solid var(--line-soft);
+}
+.rl-item:first-child .rl-row {
+  border-top: none;
+}
+.rl-row:hover,
+.rl-item.on .rl-row {
+  background: var(--paper-2);
+}
+.rl-row .u,
+.rl-row .p {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rl-row .t {
+  font-family: "JetBrains Mono", monospace;
+  color: var(--ink-soft);
+}
+.rl-row .todo {
+  color: #b08a2a;
+  font-style: normal;
+  font-size: 11px;
+}
+.rl-sp {
+  padding: 6px 18px 12px;
+  background: var(--paper-2);
+  border-top: 1px solid var(--line-soft);
+}
+.rl-spx {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.rl-spx .en {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+.rl-spx .ct {
+  margin-left: auto;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.rl-todo {
+  font-size: 12px;
+  color: #8a6a14;
+  padding: 4px 0;
+}
+.rl-meta {
+  margin-top: 6px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+/* ---- 在哪里见过 (species -> locations) ---- */
+.loc-sum {
+  font-size: 11px;
+  color: var(--ink-soft);
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--line-soft);
+  font-family: "JetBrains Mono", monospace;
+}
+.loc-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 18px;
+  border-top: 1px solid var(--line-soft);
+}
+.loc-row:first-of-type {
+  border-top: none;
+}
+.loc-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.loc-pt {
+  font-size: 13px;
+  font-weight: 500;
+}
+.loc-rg {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.loc-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  white-space: nowrap;
+}
+.loc-n {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  color: var(--ink);
+}
+.loc-mo {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
 /* ---- tiers / rows ---- */
 .tier-h {
   display: flex;
@@ -259,7 +579,7 @@ body {
 
 .row {
   display: grid;
-  grid-template-columns: 1fr 56px;
+  grid-template-columns: 1fr auto;
   align-items: center;
   gap: 10px;
   padding: 7px 8px;
@@ -298,10 +618,8 @@ body {
   gap: 6px;
 }
 .sp-name .la {
-  font-family: "JetBrains Mono", monospace;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--ink-soft);
-  font-style: italic;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -311,6 +629,12 @@ body {
   font-size: 12px;
 }
 .freq {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+.freq-n {
   font-family: "JetBrains Mono", monospace;
   font-size: 14px;
   font-weight: 500;
@@ -319,6 +643,20 @@ body {
 .freq small {
   font-size: 9px;
   color: var(--ink-soft);
+}
+.where-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 11px;
+  color: var(--hand);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.where-link:hover {
+  color: var(--ink);
+  text-decoration: underline;
 }
 .spark {
   display: block;
@@ -375,6 +713,210 @@ body {
   font-size: 11px;
   color: var(--ink-soft);
   align-items: center;
+}
+
+/* ---- 频率说明 ---- */
+.freqinfo {
+  margin-top: -4px;
+}
+.fi-toggle {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 11px;
+  color: var(--hand);
+  cursor: pointer;
+}
+.fi-toggle:hover {
+  color: var(--ink);
+}
+.fi-body {
+  margin-top: 6px;
+  border: 1.5px solid var(--line-soft);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--paper-2);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.fi-body p {
+  margin: 0 0 6px;
+}
+.fi-body p:last-child {
+  margin-bottom: 0;
+}
+.fi-body b {
+  color: var(--ink);
+}
+.fi-warn {
+  color: #8a6a14;
+}
+.fi-year small {
+  color: var(--line);
+}
+
+/* ---- list tools (我的鸟种 / 只看目标) ---- */
+.list-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.btn.sm {
+  padding: 5px 11px;
+  font-size: 12px;
+  border-radius: 7px;
+}
+.btn.sm.ghost {
+  border-color: var(--line);
+  color: var(--ink-soft);
+}
+.chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.chk input {
+  cursor: pointer;
+}
+
+/* ---- per-species marks: badges / chips / note ---- */
+.badge {
+  font-size: 12px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+}
+.chip {
+  border: 1.5px solid var(--line-soft);
+  background: #fff;
+  color: var(--ink-soft);
+  border-radius: 20px;
+  padding: 2px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.6;
+}
+.chip:hover {
+  border-color: var(--line);
+  color: var(--ink);
+}
+.chip.on {
+  border-color: var(--hi-line);
+  background: var(--hi);
+  color: #5e4708;
+  font-weight: 600;
+}
+.note-edit {
+  margin-top: 6px;
+}
+.note-edit textarea {
+  width: 100%;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  resize: vertical;
+  background: #fff;
+}
+.note-act {
+  display: flex;
+  gap: 8px;
+  margin-top: 5px;
+}
+.note-show {
+  margin-top: 5px;
+  font-size: 12px;
+  color: #6a5410;
+  background: #fff7e0;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  padding: 5px 9px;
+  cursor: pointer;
+  line-height: 1.45;
+}
+
+/* ---- 我的鸟种 modal extras ---- */
+.mk-backup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--paper-2);
+}
+.mk-hint {
+  font-size: 10px;
+  color: var(--ink-soft);
+  flex: 1 1 100%;
+  line-height: 1.4;
+}
+.mk-ok {
+  font-size: 11px;
+  color: var(--present);
+  flex: 1 1 100%;
+}
+.mk-sec {
+  padding: 8px 18px 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.mk-sec:first-child {
+  border-top: none;
+}
+.mk-sec-h {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 0 6px;
+}
+.mk-sec-h .ct {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 400;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+.mk-sec-empty {
+  font-size: 11px;
+  color: var(--ink-soft);
+  padding: 2px 0 4px;
+}
+.mk-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.mk-name {
+  flex: 1;
+  font-size: 13px;
+}
+.mk-note {
+  display: block;
+  font-size: 11px;
+  color: #6a5410;
+  margin-top: 2px;
+}
+.mk-x {
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.mk-x:hover {
+  color: #c2553f;
 }
 
 /* ---- bar chart ---- */

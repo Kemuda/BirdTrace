@@ -4,6 +4,31 @@
 
 ---
 
+## 本轮：「看什么」issue list（2026-06-04 下午）
+
+Amber 给的「看什么」issue list，分 4 批做完 + 1 项调研。
+
+- [x] **批1**：Tab 改序（看什么→去哪看→何时去，含排版）；「行程驱动…」从产品副标题移到看什么页描述(#1)、
+  去大框重复标签(#9)；英文 common name 替拉丁名(#5，来源懂鸟 `en` 字段 96%，**注意 ebird ref 的 comName 是中文不能用**)；
+  去页脚/legend 冗余字、按钮改「导出目标鸟单」；地点补省·市 `region`，加丽江市(全市)/香格里拉·高山植物园/冈仁波齐(#2)
+- [x] **批2**：报告列表(#3)——export 每点加 `reports[]`(serial/time/user/point/声明种数+明细+has_detail)；
+  前端 ReportList 弹窗「N 份报告」可点→展开鸟种；「明细待抓」诚实标注
+- [x] **批3**：目标鸟种/笔记/已学习/已见过(#3.1–3.4)——`useMarks` localStorage(按中文名)、行内 chip+笔记编辑、
+  「我的鸟种」聚合弹窗 + **一键备份导出/导入**(防 localStorage 被清)、「只看目标」筛选
+- [x] **批4**：频率算法说明写进 UI(#4)「频率=含该鸟报告数÷总报告数×100，同 eBird 口径」+ 明细待抓导致偏低的诚实提示(#4.1)；
+  年份透明(#8)`report_years`，现已合并 2024+2025 6月
+- [x] **数据补抓(#7,#4.1 根源)**：`fetch_trip.py` 后台补 6 月鸟种明细（原 1264/1396 缺明细）。加 `scrape_status.py`
+  实时进度 + 前端进度条（验证码自动换会话重试、**不需人工解**；卡住才告警）。已验证补抓是**真数据**
+  （白马雪山 0→34 种；独克宗红嘴山鸦 33.3%→83.3%）。⚠️ 后台进程未必跑完 628 份——撞 505 越来越频，
+  **可重跑 `fetch_trip.py` 续抓**，再 `load_checklists.py` + `export_json.py --trip`
+- [x] **eBird 路线A 已做(#3.4)**：Amber 给了 `ebird_world_year_list.csv`。前端「我的鸟种」加「导入 eBird CSV」按钮，
+  按中文名(+学名桥接 `ebird_sci_to_cn.json` 兜底)标「已见过」。纯前端解析、存 localStorage、不上传。
+  实测她 52 行全标上、31 种出现在行程名录。eBird 括号别名(白骨顶(骨顶鸡))靠学名桥接纠正
+- [ ] **eBird 路线B(#6)**：用 eBird 热点频率补 birdreport 薄样本——较重、需 API key/条款核查，
+  见 `docs/ebird-integration-research-prompt.md`，等 Amber 决定
+
+---
+
 ## 当前 MVP：用 6 月行程驱动「时间 + 地点 → 鸟种」
 
 **驱动用例**：Amber 2026-06-09～22 的 14 天行程（云南西北 + 西藏），回答「我这几天去这些地方，能看到什么鸟」。完整行程见对话 / 记忆 `birdtrace-june-trip`。设计细节见 `docs/mvp-trip.md`。

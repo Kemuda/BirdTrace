@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS observations (
     taxon_id     INTEGER,
     taxon_name   TEXT,
     latin_name   TEXT,
+    english_name TEXT,
     taxon_count  INTEGER
 );
 
@@ -55,6 +56,20 @@ def connect(path: Path = DB_PATH) -> sqlite3.Connection:
 def main() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA)
+        # Idempotent migration: add observations.english_name to pre-existing DBs
+        # (birdreport's obs payload carries `englishname`, 100% covered — more
+        # authoritative than the 懂鸟 fallback, see export_json.english_common).
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(observations)")]
+        if "english_name" not in cols:
+            conn.execute("ALTER TABLE observations ADD COLUMN english_name TEXT")
+            print("migrated: observations += english_name")
+        # checklists: 单报告详情(/front/activity/get) 带回的 pointId / address
+        # （lat/lng 列本就有，之前列表接口拿不到、现在 get 能拿到坐标回填）。
+        ck = [r[1] for r in conn.execute("PRAGMA table_info(checklists)")]
+        for col in ("point_id", "address"):
+            if col not in ck:
+                conn.execute(f"ALTER TABLE checklists ADD COLUMN {col} TEXT")
+                print(f"migrated: checklists += {col}")
     print(f"schema ready -> {DB_PATH}")
 
 

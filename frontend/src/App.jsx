@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import PageList from "./pages/PageList.jsx";
 import PageChart from "./pages/PageChart.jsx";
 import PageMap from "./pages/PageMap.jsx";
+import ScrapeStatus from "./components/ScrapeStatus.jsx";
 
 const TABS = [
   { id: "list", name: "看什么", combo: "地+时→鸟" },
-  { id: "chart", name: "何时去", combo: "地+鸟→时" },
   { id: "map", name: "去哪看", combo: "时+鸟→地" },
+  { id: "chart", name: "何时去", combo: "地+鸟→时" },
 ];
 
 const VALID = new Set(["list", "chart", "map"]);
@@ -72,9 +73,11 @@ export default function App() {
       <div className="app-head">
         <div>
           <h1>BirdTrace</h1>
-          <div className="sub">行程驱动的「时间 + 地点 → 鸟种」· 中国观鸟记录中心数据</div>
+          <div className="sub">中国观鸟记录中心数据 · 探索界面</div>
         </div>
       </div>
+
+      <ScrapeStatus />
 
       <div className="tabs">
         {TABS.map((t) => (
@@ -103,7 +106,7 @@ export default function App() {
         <a href="https://birdreport.cn" target="_blank" rel="noreferrer">
           中国观鸟记录中心
         </a>
-        。非官方探索界面 · 样本薄处已诚实标注，不假装权威。
+        。非官方探索界面。
       </div>
     </div>
   );

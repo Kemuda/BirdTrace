@@ -23,17 +23,31 @@ ROOT = Path(__file__).resolve().parents[1]
 CHECKLISTS_DIR = ROOT / "raw" / "checklists"
 OBSERVATIONS_DIR = ROOT / "raw" / "observations"
 
+# Upsert only the list-derived columns. lat/lng/point_id/address come from a
+# DIFFERENT endpoint (/front/activity/get, via fetch_report_detail.py) and the
+# list payload has none of them — so we must NOT touch those columns on reload,
+# or every re-import would wipe the scraped coordinates. (ON CONFLICT preserves
+# any column we don't name.)
 CHECKLIST_INSERT = """
-INSERT OR REPLACE INTO checklists
-    (report_id, serial_id, start_time, province, city, district,
-     point_name, lat, lng, taxon_count, username)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO checklists
+    (report_id, serial_id, start_time, province, city, district, point_name,
+     taxon_count, username)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(report_id) DO UPDATE SET
+    serial_id   = excluded.serial_id,
+    start_time  = excluded.start_time,
+    province    = excluded.province,
+    city        = excluded.city,
+    district    = excluded.district,
+    point_name  = excluded.point_name,
+    taxon_count = excluded.taxon_count,
+    username    = excluded.username
 """
 
 OBSERVATION_INSERT = """
 INSERT INTO observations
-    (report_id, taxon_id, taxon_name, latin_name, taxon_count)
-VALUES (?, ?, ?, ?, ?)
+    (report_id, taxon_id, taxon_name, latin_name, english_name, taxon_count)
+VALUES (?, ?, ?, ?, ?, ?)
 """
 
 
@@ -97,8 +111,6 @@ def load_checklists(conn: sqlite3.Connection) -> int:
                 _first(rec, "city_name", "city"),
                 _first(rec, "district_name", "district"),
                 _first(rec, "point_name", "pointName"),
-                _first(rec, "lat", "latitude", "point_lat"),
-                _first(rec, "lng", "lon", "longitude", "point_lng"),
                 _first(rec, "taxoncount", "taxon_count"),
                 _first(rec, "username"),
             ))
@@ -119,6 +131,7 @@ def load_observations(conn: sqlite3.Connection) -> int:
                 _first(rec, "taxon_id", "taxonId"),
                 _first(rec, "taxon_name", "taxonName"),
                 _first(rec, "latinname", "latin_name", "latinName"),
+                _first(rec, "englishname", "english_name", "englishName"),
                 _first(rec, "taxon_count", "taxonCount"),
             ))
             rows += 1

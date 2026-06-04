@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BirdTrace · UI 草图（可直接改）</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <!--
+      ┌─────────────────────────────────────────────────────────────┐
+      │ 这是 BirdTrace「看什么」页的静态 UI 草图。                     │
+      │ - 纯 HTML + 内联 CSS + 一点点 JS（仅用于演示弹窗/开关）。      │
+      │ - 数据是写死的样例，不连后端。                                 │
+      │ - 你可以直接改这个文件（文字 / 颜色 / 布局 / 顺序），          │
+      │   改完发回给我，我再据此优化正式前端的 UI/UX。                 │
+      │ 颜色都在下面 :root 里；改一处全局生效。                        │
+      └─────────────────────────────────────────────────────────────┘
+    -->
+    <style>
+      :root {
+        --ink: #33312c;
+        --ink-soft: #6c685f;
+        --line: #aaa49a;
+        --line-soft: #cfc9bd;
+        --paper: #fbf9f4;
+        --paper-2: #f3efe6;
+        --hi: #ffe7a3;
+        --hi-line: #d9a92e;
+        --hand: #3b5c8a;
+        --present: #3f7d57;
+        --gone: #b9b3a7;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Noto Sans SC", system-ui, sans-serif;
+        color: var(--ink);
+        background: var(--paper-2);
+      }
+
+      /* ---- app shell ---- */
+      .app { max-width: 860px; margin: 0 auto; padding: 22px 16px 40px; }
+      .app-head {
+        display: flex; align-items: baseline; justify-content: space-between;
+        gap: 12px; margin-bottom: 14px;
+      }
+      .app-head h1 { font-size: 22px; font-weight: 700; margin: 0; }
+      .app-head .sub { font-size: 12px; color: var(--ink-soft); }
+      .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+      .tab {
+        border: 1.5px solid var(--line); border-radius: 20px; padding: 6px 14px;
+        font-size: 13px; color: var(--ink-soft); background: #fff; cursor: pointer;
+      }
+      .tab.on {
+        border-color: var(--ink); color: var(--ink); font-weight: 600; background: var(--paper-2);
+      }
+      .tab .combo {
+        font-family: "JetBrains Mono", monospace; font-size: 10px; opacity: 0.7; margin-left: 6px;
+      }
+
+      /* ---- scrape progress banner ---- */
+      .scrape {
+        border: 1.5px solid var(--line); border-radius: 10px; background: #fff;
+        padding: 10px 14px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 6px;
+      }
+      .scrape .srow {
+        display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 13px;
+      }
+      .scrape .snum { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--ink-soft); }
+      .scrape .sbar { height: 6px; border-radius: 4px; background: var(--paper-2); overflow: hidden; }
+      .scrape .sbar i { display: block; height: 100%; background: var(--hand); }
+      .scrape .snote { font-size: 11px; color: var(--ink-soft); line-height: 1.5; }
+
+      /* ---- page shell ---- */
+      .wf {
+        background: var(--paper); border: 1.5px solid var(--line-soft); border-radius: 12px;
+        padding: 20px 22px; display: flex; flex-direction: column; gap: 14px;
+      }
+      .wf-desc { font-size: 12px; letter-spacing: 0.02em; color: var(--ink-soft); }
+      .region { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-soft); margin-top: -4px; }
+
+      /* ---- query bar ---- */
+      .qbar { display: flex; align-items: stretch; gap: 10px; }
+      .slot {
+        flex: 1; border: 1.5px solid var(--line); border-radius: 10px; background: #fff;
+        padding: 9px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0;
+      }
+      .slot .lab { font-size: 10px; letter-spacing: 0.08em; color: var(--ink-soft); text-transform: uppercase; }
+      .slot .val { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .slot select {
+        border: none; outline: none; background: transparent; font-size: 15px; font-weight: 500;
+        color: var(--ink); font-family: inherit; width: 100%; padding: 0;
+      }
+      .slot.answer { border: 1.5px dashed var(--hi-line); background: linear-gradient(0deg, var(--hi), #fff7e0); }
+      .slot.answer .lab { color: var(--hi-line); }
+      .slot.answer .ans { font-family: "Caveat", cursive; color: var(--hi-line); font-size: 18px; font-weight: 700; }
+
+      /* ---- conclusion banner ---- */
+      .concl {
+        background: var(--hi); border: 1.5px solid var(--hi-line); border-radius: 10px;
+        padding: 10px 14px; display: flex; align-items: baseline; gap: 10px;
+      }
+      .concl .k {
+        font-size: 11px; letter-spacing: 0.06em; color: #8a6a14; text-transform: uppercase; white-space: nowrap;
+      }
+      .concl .v { font-size: 17px; font-weight: 700; color: #5e4708; }
+      .concl .v small { font-weight: 500; font-size: 13px; color: #8a6a14; }
+
+      /* ---- 频率说明 ---- */
+      .freqinfo { margin-top: -4px; }
+      .fi-toggle { border: none; background: none; padding: 0; font: inherit; font-size: 11px; color: var(--hand); cursor: pointer; }
+      .fi-body {
+        margin-top: 6px; border: 1.5px solid var(--line-soft); border-radius: 8px; padding: 8px 12px;
+        background: var(--paper-2); font-size: 12px; line-height: 1.55; color: var(--ink-soft);
+      }
+      .fi-body p { margin: 0 0 6px; }
+      .fi-body p:last-child { margin-bottom: 0; }
+      .fi-body b { color: var(--ink); }
+      .fi-warn { color: #8a6a14; }
+      .fi-year small { color: var(--line); }
+
+      /* ---- trust line + tools ---- */
+      .meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+      .trust {
+        font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-soft);
+        border: 1.5px solid var(--line-soft); border-radius: 6px; padding: 4px 8px;
+      }
+      .trust.warn { border-color: var(--hi-line); color: #8a6a14; background: #fff7e0; }
+      .rlink {
+        border: none; background: none; padding: 0; font: inherit; color: var(--hand); cursor: pointer;
+        text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px;
+      }
+      .list-tools { display: flex; align-items: center; gap: 12px; }
+      .chk { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-soft); cursor: pointer; }
+
+      /* ---- tiers / rows ---- */
+      .tier-h { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; padding: 10px 2px 6px; color: var(--ink); }
+      .tier-h .ct { font-family: "JetBrains Mono", monospace; font-weight: 400; color: var(--ink-soft); font-size: 11px; }
+      .tier-h .bar3 { display: flex; gap: 2px; }
+      .tier-h .bar3 i { width: 5px; height: 11px; border-radius: 1px; background: var(--line); display: block; }
+      .tier-must .bar3 i { background: var(--ink); }
+      .tier-mid .bar3 i:nth-child(-n + 2) { background: var(--ink-soft); }
+      .tier-rare .bar3 i:first-child { background: var(--ink-soft); }
+
+      .row {
+        display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px;
+        padding: 7px 8px; border-top: 1px solid var(--line-soft);
+      }
+      .row:hover { background: var(--paper-2); }
+      .sp-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+      .sp-name .cn { font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+      .sp-name .la { font-size: 11px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .star { color: var(--hi-line); font-size: 12px; }
+      .badge { font-size: 12px; }
+      .sp-name .links { display: flex; gap: 12px; margin-top: 3px; }
+      .sp-name .links a { font-size: 11px; color: var(--hand); text-decoration: none; border-bottom: 1px dotted var(--hand); }
+
+      .freq { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+      .freq-n { font-family: "JetBrains Mono", monospace; font-size: 14px; font-weight: 500; text-align: right; }
+      .freq small { font-size: 9px; color: var(--ink-soft); }
+      .where-link { border: none; background: none; padding: 0; font: inherit; font-size: 11px; color: var(--hand); cursor: pointer; white-space: nowrap; }
+
+      /* ---- chips / note ---- */
+      .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+      .chip {
+        border: 1.5px solid var(--line-soft); background: #fff; color: var(--ink-soft); border-radius: 20px;
+        padding: 2px 9px; font-size: 11px; cursor: pointer; font-family: inherit; line-height: 1.6;
+      }
+      .chip.on { border-color: var(--hi-line); background: var(--hi); color: #5e4708; font-weight: 600; }
+      .note-show {
+        margin-top: 5px; font-size: 12px; color: #6a5410; background: #fff7e0; border: 1px solid var(--line-soft);
+        border-radius: 7px; padding: 5px 9px; cursor: pointer; line-height: 1.45;
+      }
+
+      /* ---- bottom action ---- */
+      .take { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 8px; }
+      .btn {
+        border: 1.5px solid var(--ink); border-radius: 8px; padding: 9px 16px; font-size: 13px; font-weight: 500;
+        background: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+      }
+      .btn.solid { background: var(--ink); color: var(--paper); }
+      .btn.sm { padding: 5px 11px; font-size: 12px; border-radius: 7px; }
+      .legend { display: flex; gap: 14px; font-size: 11px; color: var(--ink-soft); align-items: center; }
+
+      .foot { font-size: 11px; color: var(--ink-soft); margin-top: 18px; text-align: center; }
+      .foot a { color: var(--hand); }
+
+      /* ---- modal (shared) ---- */
+      .modal-bg {
+        position: fixed; inset: 0; background: rgba(40, 38, 33, 0.42); display: none;
+        align-items: center; justify-content: center; padding: 20px; z-index: 50;
+      }
+      .modal-bg.open { display: flex; }
+      .modal {
+        background: var(--paper); border: 1.5px solid var(--line); border-radius: 12px; width: 100%;
+        max-width: 560px; max-height: 84vh; display: flex; flex-direction: column;
+        box-shadow: 0 14px 40px rgba(40, 38, 33, 0.28);
+      }
+      .modal-h {
+        display: flex; align-items: center; justify-content: space-between; padding: 14px 18px;
+        border-bottom: 1.5px solid var(--line-soft); font-size: 15px;
+      }
+      .modal-h .x { border: none; background: none; font-size: 22px; line-height: 1; color: var(--ink-soft); cursor: pointer; }
+      .modal-note { font-size: 11px; color: var(--ink-soft); padding: 8px 18px; line-height: 1.5; background: var(--paper-2); }
+      .rl-body { overflow-y: auto; }
+
+      /* report list */
+      .rl-head, .rl-row { display: grid; grid-template-columns: 84px 1fr 1.3fr 64px; gap: 8px; align-items: center; }
+      .rl-head { padding: 8px 18px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); border-bottom: 1px solid var(--line-soft); }
+      .rl-head .r, .rl-row .r { text-align: right; }
+      .rl-row { padding: 9px 18px; font-size: 12px; cursor: pointer; border-top: 1px solid var(--line-soft); }
+      .rl-row .t { font-family: "JetBrains Mono", monospace; color: var(--ink-soft); }
+      .rl-row .todo { color: #b08a2a; font-size: 11px; }
+      .rl-sp { padding: 6px 18px 12px; background: var(--paper-2); border-top: 1px solid var(--line-soft); }
+      .rl-spx { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font-size: 12px; }
+      .rl-spx .en { color: var(--ink-soft); font-size: 11px; }
+      .rl-spx .ct { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-soft); }
+      .rl-meta { margin-top: 6px; font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-soft); }
+
+      /* 我的鸟种 */
+      .mk-backup { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 18px; border-bottom: 1px solid var(--line-soft); background: var(--paper-2); }
+      .mk-hint { font-size: 10px; color: var(--ink-soft); flex: 1 1 100%; line-height: 1.4; }
+      .mk-sec { padding: 8px 18px 12px; border-top: 1px solid var(--line-soft); }
+      .mk-sec:first-child { border-top: none; }
+      .mk-sec-h { font-size: 12px; font-weight: 700; padding: 4px 0 6px; }
+      .mk-sec-h .ct { font-family: "JetBrains Mono", monospace; font-weight: 400; color: var(--ink-soft); font-size: 11px; }
+      .mk-row { display: flex; align-items: baseline; gap: 8px; padding: 5px 0; border-top: 1px solid var(--line-soft); }
+      .mk-name { flex: 1; font-size: 13px; }
+      .mk-note { display: block; font-size: 11px; color: #6a5410; margin-top: 2px; }
+      .mk-x { border: none; background: none; color: var(--ink-soft); font-size: 17px; line-height: 1; cursor: pointer; }
+
+      /* 在哪里见过 */
+      .loc-sum { font-size: 11px; color: var(--ink-soft); padding: 8px 18px; border-bottom: 1px solid var(--line-soft); font-family: "JetBrains Mono", monospace; }
+      .loc-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 8px 18px; border-top: 1px solid var(--line-soft); }
+      .loc-row:first-of-type { border-top: none; }
+      .loc-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+      .loc-pt { font-size: 13px; font-weight: 500; }
+      .loc-rg { font-size: 11px; color: var(--ink-soft); }
+      .loc-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; }
+      .loc-n { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--ink); }
+      .loc-mo { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-soft); }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <!-- 顶部标题 -->
+      <div class="app-head">
+        <div>
+          <h1>BirdTrace</h1>
+          <div class="sub">中国观鸟记录中心数据 · 探索界面</div>
+        </div>
+      </div>
+
+      <!-- 补抓进度条（演示用，正式版会自动显示/隐藏） -->
+      <div class="scrape">
+        <div class="srow">
+          <b>⟳ 鸟种明细补抓中</b>
+          <span class="snum">467/865（54%）</span>
+        </div>
+        <div class="sbar"><i style="width: 54%"></i></div>
+        <div class="snote">本轮 230/628 · 自动跳过验证码 91 次（无需手动解）· 12:19 更新</div>
+      </div>
+
+      <!-- 三个 Tab：看什么 / 去哪看 / 何时去 -->
+      <div class="tabs">
+        <button class="tab on">看什么<span class="combo">地+时→鸟</span></button>
+        <button class="tab">去哪看<span class="combo">时+鸟→地</span></button>
+        <button class="tab">何时去<span class="combo">地+鸟→时</span></button>
+      </div>
+
+      <!-- 「看什么」页 -->
+      <div class="wf">
+        <div class="wf-desc">行程驱动的「时间 + 地点 → 鸟种」</div>
+
+        <!-- 三槽查询条：地点 / 时间 / 鸟种（留空那槽＝本页答案） -->
+        <div class="qbar">
+          <div class="slot">
+            <div class="lab">📍 地点</div>
+            <div class="val">
+              <select>
+                <option>玉龙雪山 · 云杉坪</option>
+                <option>蓝月谷</option>
+                <option>独克宗古城</option>
+                <option>白马雪山</option>
+                <option>冈仁波齐（转山）</option>
+              </select>
+            </div>
+          </div>
+          <div class="slot">
+            <div class="lab">📅 时间</div>
+            <div class="val">6 月（行程月）</div>
+          </div>
+          <div class="slot answer">
+            <div class="lab">🐦 鸟种</div>
+            <div class="ans">＝ 本页答案</div>
+          </div>
+        </div>
+
+        <div class="region">📍 云南 · 丽江市 · 玉龙县</div>
+
+        <!-- 速读 -->
+        <div class="concl">
+          <span class="k">速读</span>
+          <span class="v">6 月共报告 18 种 <small>· 最常见「红嘴山鸦」83.3%</small></span>
+        </div>
+
+        <!-- 频率说明（可展开） -->
+        <div class="freqinfo">
+          <button class="fi-toggle" onclick="toggleFreq()">ⓘ 频率怎么算</button>
+          <div class="fi-body" id="fi-body" style="display: none">
+            <p>
+              <b>频率 = 含该鸟的报告数 ÷ 该地 6 月总报告数 × 100。</b>
+              和 eBird 的「frequency」同口径：衡量的是<b>遇见率</b>（多少份清单记录到它），不是数量多少。
+            </p>
+            <p class="fi-warn">
+              注意：现在分母里有 12 份报告是「明细待抓」（声明有鸟、但后台还没抓到鸟种清单），
+              所以这些鸟的频率<b>偏低</b> —— 等明细补抓完会自动上调。
+            </p>
+            <p class="fi-year">样本年份：2024 年（1 份）+ 2025 年（5 份）6 月合并。</p>
+          </div>
+        </div>
+
+        <!-- 信任行 + 工具 -->
+        <div class="meta">
+          <div class="trust">基于 <button class="rlink" onclick="openModal('modal-reports')">42 份报告</button> · 行程月</div>
+          <div class="list-tools">
+            <button class="btn sm" onclick="openModal('modal-marks')">★ 我的鸟种 (52)</button>
+            <label class="chk"><input type="checkbox" /> 只看目标</label>
+          </div>
+        </div>
+
+        <!-- 名录：三档 -->
+        <!-- 几乎必见 -->
+        <div class="tier tier-must">
+          <div class="tier-h">
+            <span class="bar3"><i></i><i></i><i></i></span>
+            几乎必见 <span class="ct">频率 &gt;60% · 2 种</span>
+          </div>
+
+          <div class="row">
+            <div class="sp-name">
+              <span class="cn">红嘴山鸦 <span class="badge" title="已见过">👁</span></span>
+              <span class="la">Red-billed Chough</span>
+              <span class="links"><a href="#">eBird</a><a href="#">懂鸟</a><a href="#">鸣声♪</a></span>
+              <span class="chips">
+                <button class="chip" onclick="this.classList.toggle('on')">★目标</button>
+                <button class="chip on" onclick="this.classList.toggle('on')">📖已学习</button>
+                <button class="chip on" onclick="this.classList.toggle('on')">👁已见过</button>
+                <button class="chip" onclick="this.classList.toggle('on')">✎笔记</button>
+              </span>
+            </div>
+            <div class="freq">
+              <div class="freq-n">83.3<small>%</small></div>
+              <button class="where-link" onclick="openModal('modal-where')">📍在哪见过</button>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="sp-name">
+              <span class="cn">大嘴乌鸦</span>
+              <span class="la">Large-billed Crow</span>
+              <span class="links"><a href="#">eBird</a><a href="#">懂鸟</a><a href="#">鸣声♪</a></span>
+              <span class="chips">
+                <button class="chip" onclick="this.classList.toggle('on')">★目标</button>
+                <button class="chip" onclick="this.classList.toggle('on')">📖已学习</button>
+                <button class="chip" onclick="this.classList.toggle('on')">👁已见过</button>
+                <button class="chip" onclick="this.classList.toggle('on')">✎笔记</button>
+              </span>
+            </div>
+            <div class="freq">
+              <div class="freq-n">75.0<small>%</small></div>
+              <button class="where-link" onclick="openModal('modal-where')">📍在哪见过</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 有机会 -->
+        <div class="tier tier-mid">
+          <div class="tier-h">
+            <span class="bar3"><i></i><i></i><i></i></span>
+            有机会 <span class="ct">20–60% · 2 种</span>
+          </div>
+
+          <div class="row">
+            <div class="sp-name">
+              <span class="cn">红尾水鸲 <span class="badge" title="目标鸟种">🎯</span></span>
+              <span class="la">Plumbeous Water Redstart</span>
+              <span class="links"><a href="#">eBird</a><a href="#">懂鸟</a><a href="#">鸣声♪</a></span>
+              <span class="chips">
+                <button class="chip on" onclick="this.classList.toggle('on')">★目标</button>
+                <button class="chip" onclick="this.classList.toggle('on')">📖已学习</button>
+                <button class="chip" onclick="this.classList.toggle('on')">👁已见过</button>
+                <button class="chip on" onclick="this.classList.toggle('on')">✎笔记</button>
+              </span>
+              <div class="note-show">✎ 溪流边石头上摆尾，蓝灰配栗红尾</div>
+            </div>
+            <div class="freq">
+              <div class="freq-n">41.7<small>%</small></div>
+              <button class="where-link" onclick="openModal('modal-where')">📍在哪见过</button>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="sp-name">
+              <span class="cn">黄臀鹎</span>
+              <span class="la">Brown-breasted Bulbul</span>
+              <span class="links"><a href="#">eBird</a><a href="#">懂鸟</a><a href="#">鸣声♪</a></span>
+              <span class="chips">
+                <button class="chip" onclick="this.classList.toggle('on')">★目标</button>
+                <button class="chip" onclick="this.classList.toggle('on')">📖已学习</button>
+                <button class="chip" onclick="this.classList.toggle('on')">👁已见过</button>
+                <button class="chip" onclick="this.classList.toggle('on')">✎笔记</button>
+              </span>
+            </div>
+            <div class="freq">
+              <div class="freq-n">25.0<small>%</small></div>
+              <button class="where-link" onclick="openModal('modal-where')">📍在哪见过</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 撞大运 · 稀有 -->
+        <div class="tier tier-rare">
+          <div class="tier-h">
+            <span class="bar3"><i></i><i></i><i></i></span>
+            撞大运 · 稀有 <span class="ct">&lt;20% · 2 种</span>
+          </div>
+
+          <div class="row">
+            <div class="sp-name">
+              <span class="cn">红胸朱雀 <span class="star">★</span></span>
+              <span class="la">Red-fronted Rosefinch</span>
+              <span class="links"><a href="#">eBird</a><a href="#">懂鸟</a><a href="#">鸣声♪</a></span>
+              <span class="chips">
+                <button class="chip" onclick="this.classList.toggle('on')">★目标</button>
+                <button class="chip" onclick="this.classList.toggle('on')">📖已学习</button>
+                <button class="chip" onclick="this.classList.toggle('on')">👁已见过</button>
+                <button class="chip" onclick="this.classList.toggle('on')">✎笔记</button>
+              </span>
+            </div>
+            <div class="freq">
+              <div class="freq-n">16.7<small>%</small></div>
+              <button class="where-link" onclick="openModal('modal-where')">📍在哪见过</button>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="sp-name">
+              <span class="cn">血雉 <span class="star">★</span></span>
+              <span class="la">Blood Pheasant</span>
+              <span class="links"><a href="#">eBird</a><a href="#">懂鸟</a><a href="#">鸣声♪</a></span>
+              <span class="chips">
+                <button class="chip on" onclick="this.classList.toggle('on')">★目标</button>
+                <button class="chip" onclick="this.classList.toggle('on')">📖已学习</button>
+                <button class="chip" onclick="this.classList.toggle('on')">👁已见过</button>
+                <button class="chip" onclick="this.classList.toggle('on')">✎笔记</button>
+              </span>
+            </div>
+            <div class="freq">
+              <div class="freq-n">8.3<small>%</small></div>
+              <button class="where-link" onclick="openModal('modal-where')">📍在哪见过</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 底部操作 -->
+        <div class="take">
+          <div class="legend"><span><span class="star">★</span>稀有</span></div>
+          <button class="btn solid">⤓ 导出目标鸟单</button>
+        </div>
+      </div>
+
+      <div class="foot">
+        数据来源：<a href="https://birdreport.cn">中国观鸟记录中心</a>。非官方探索界面。
+      </div>
+    </div>
+
+    <!-- ============ 弹窗：报告列表 ============ -->
+    <div class="modal-bg" id="modal-reports">
+      <div class="modal">
+        <div class="modal-h">
+          <b>玉龙雪山 · 云杉坪 · 6 月报告（42）</b>
+          <button class="x" onclick="closeModal('modal-reports')">×</button>
+        </div>
+        <div class="modal-note">点报告看鸟种明细。38/42 份已有明细；「明细待抓」= 后台还没抓到该报告的鸟种清单，会让频率偏低。</div>
+        <div class="rl-head"><span>时间</span><span>用户</span><span>地点</span><span class="r">鸟种</span></div>
+        <div class="rl-body">
+          <div class="rl-item on">
+            <div class="rl-row"><span class="t">06-19 21:00</span><span class="u">Asaiii</span><span class="p">独克宗古城</span><span class="r">12 种</span></div>
+            <div class="rl-sp">
+              <div class="rl-spx"><span class="cn">红嘴山鸦</span><span class="en">Red-billed Chough</span><span class="ct">×8</span></div>
+              <div class="rl-spx"><span class="cn">大嘴乌鸦</span><span class="en">Large-billed Crow</span><span class="ct">×3</span></div>
+              <div class="rl-spx"><span class="cn">红尾水鸲</span><span class="en">Plumbeous Water Redstart</span><span class="ct">×1</span></div>
+              <div class="rl-meta">报告编号 2025061901482</div>
+            </div>
+          </div>
+          <div class="rl-item">
+            <div class="rl-row"><span class="t">06-10 17:00</span><span class="u">Waterlily</span><span class="p">香格里拉市独克宗古城</span><span class="r"><em class="todo">明细待抓</em></span></div>
+          </div>
+          <div class="rl-item">
+            <div class="rl-row"><span class="t">06-06 09:10</span><span class="u">比格</span><span class="p">独克宗古城</span><span class="r">3 种</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 弹窗：我的鸟种 ============ -->
+    <div class="modal-bg" id="modal-marks">
+      <div class="modal">
+        <div class="modal-h">
+          <b>我的鸟种</b>
+          <button class="x" onclick="closeModal('modal-marks')">×</button>
+        </div>
+        <div class="mk-backup">
+          <button class="btn sm">⤓ 导出备份</button>
+          <button class="btn sm">⤒ 导入备份</button>
+          <button class="btn sm">🦤 导入 eBird CSV（标已见过）</button>
+          <span class="mk-hint">存在本浏览器。建议偶尔导出备份 —— 清「网站数据」或换设备不会自动同步。</span>
+        </div>
+        <div class="rl-body">
+          <div class="mk-sec">
+            <div class="mk-sec-h">★ 目标鸟种 <span class="ct">2</span></div>
+            <div class="mk-row"><div class="mk-name">红尾水鸲<span class="mk-note">✎ 溪流边石头上摆尾，蓝灰配栗红尾</span></div><button class="mk-x">×</button></div>
+            <div class="mk-row"><div class="mk-name">血雉</div><button class="mk-x">×</button></div>
+          </div>
+          <div class="mk-sec">
+            <div class="mk-sec-h">👁 已见过 <span class="ct">52</span></div>
+            <div class="mk-row"><div class="mk-name">红嘴山鸦</div><button class="mk-x">×</button></div>
+            <div class="mk-row"><div class="mk-name">池鹭</div><button class="mk-x">×</button></div>
+            <div class="mk-row"><div class="mk-name">凤头䴙䴘</div><button class="mk-x">×</button></div>
+          </div>
+          <div class="mk-sec">
+            <div class="mk-sec-h">📖 已学习 <span class="ct">1</span></div>
+            <div class="mk-row"><div class="mk-name">红尾水鸲</div><button class="mk-x">×</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 弹窗：在哪里见过 ============ -->
+    <div class="modal-bg" id="modal-where">
+      <div class="modal">
+        <div class="modal-h">
+          <b>红嘴山鸦 · 在哪里见过</b>
+          <button class="x" onclick="closeModal('modal-where')">×</button>
+        </div>
+        <div class="modal-note">范围 = 已抓取的云南 + 西藏数据，按报告数排序。月份是该地点记录到它的月份。</div>
+        <div class="rl-body">
+          <div class="loc-sum">共 60 个地点 · 91 份报告记录到</div>
+          <div class="loc-row">
+            <div class="loc-main"><span class="loc-pt">香格里拉高山植物园</span><span class="loc-rg">云南 · 迪庆藏族自治州 · 香格里拉市</span></div>
+            <div class="loc-meta"><span class="loc-n">7 报告</span><span class="loc-mo">5月 6月</span></div>
+          </div>
+          <div class="loc-row">
+            <div class="loc-main"><span class="loc-pt">普达措国家公园</span><span class="loc-rg">云南 · 迪庆藏族自治州 · 香格里拉市</span></div>
+            <div class="loc-meta"><span class="loc-n">6 报告</span><span class="loc-mo">5月 6月</span></div>
+          </div>
+          <div class="loc-row">
+            <div class="loc-main"><span class="loc-pt">羊卓雍措</span><span class="loc-rg">西藏 · 山南市 · 浪卡子县</span></div>
+            <div class="loc-meta"><span class="loc-n">3 报告</span><span class="loc-mo">5月 6月</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // 仅用于演示弹窗/开关，正式版用 React 实现。
+      function openModal(id) { document.getElementById(id).classList.add("open"); }
+      function closeModal(id) { document.getElementById(id).classList.remove("open"); }
+      function toggleFreq() {
+        var b = document.getElementById("fi-body");
+        b.style.display = b.style.display === "none" ? "block" : "none";
+      }
+      // 点 Tab 切换高亮（仅视觉）
+      document.querySelectorAll(".tab").forEach(function (t) {
+        t.addEventListener("click", function () {
+          document.querySelectorAll(".tab").forEach(function (x) { x.classList.remove("on"); });
+          t.classList.add("on");
+        });
+      });
+      // 点遮罩关闭弹窗
+      document.querySelectorAll(".modal-bg").forEach(function (m) {
+        m.addEventListener("click", function (e) { if (e.target === m) m.classList.remove("open"); });
+      });
+    </script>
+  </body>
+</html>
