@@ -9,7 +9,7 @@ function fmtTime(t) {
   return m ? `${m[1]} ${m[2]}` : t;
 }
 
-export default function ReportList({ label, reports, onClose }) {
+export default function ReportList({ label, reports, onClose, scope = "6 月" }) {
   const [open, setOpen] = useState(null);
   const withDetail = reports.filter((r) => r.has_detail).length;
 
@@ -17,7 +17,7 @@ export default function ReportList({ label, reports, onClose }) {
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-h">
-          <b>{label} · 6 月报告（{reports.length}）</b>
+          <b>{label} · {scope}报告（{reports.length}）</b>
           <button className="x" onClick={onClose} aria-label="关闭">
             ×
           </button>

@@ -3,128 +3,11 @@ import QueryBar from "../components/QueryBar.jsx";
 import ReportList from "../components/ReportList.jsx";
 import TargetList from "../components/TargetList.jsx";
 import SpeciesLocations from "../components/SpeciesLocations.jsx";
+import SpeciesChecklist from "../components/SpeciesChecklist.jsx";
+import PageRegion from "./PageRegion.jsx";
 import { useMarks } from "../hooks/useMarks.js";
 
-// 频率分层：几乎必见 / 有机会 / 撞大运·稀有。
-const TIERS = [
-  { cls: "tier-must", name: "几乎必见", hint: "频率 >60%", test: (f) => f > 60 },
-  { cls: "tier-mid", name: "有机会", hint: "20–60%", test: (f) => f >= 20 && f <= 60 },
-  { cls: "tier-rare", name: "撞大运 · 稀有", hint: "<20%", test: (f) => f < 20 },
-];
-
-function SpRow({ d, mark, onToggle, onNote, onWhere }) {
-  const rare = d.frequency_pct < 20;
-  const L = d.links || {};
-  const m = mark || {};
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-
-  function openNote() {
-    setDraft(m.note || "");
-    setEditing(true);
-  }
-  function saveNote() {
-    onNote(d.name, draft.trim());
-    setEditing(false);
-  }
-
-  return (
-    <div className="row">
-      <div className="sp-name">
-        <span className="cn">
-          {d.name}
-          {rare && <span className="star" title="稀有">★</span>}
-          {m.seen && <span className="badge seen" title="已见过">👁</span>}
-          {m.target && <span className="badge tgt" title="目标鸟种">🎯</span>}
-        </span>
-        <span className="la">{d.english_name || ""}</span>
-        <span className="links">
-          {L.ebird && (
-            <a href={L.ebird} target="_blank" rel="noreferrer">eBird</a>
-          )}
-          {L.dongniao && (
-            <a href={L.dongniao} target="_blank" rel="noreferrer">懂鸟</a>
-          )}
-          {L.xenocanto && (
-            <a href={L.xenocanto} target="_blank" rel="noreferrer">鸣声♪</a>
-          )}
-        </span>
-        <span className="chips">
-          <button className={"chip" + (m.target ? " on" : "")} onClick={() => onToggle(d.name, "target")}>
-            ★目标
-          </button>
-          <button className={"chip" + (m.learned ? " on" : "")} onClick={() => onToggle(d.name, "learned")}>
-            📖已学习
-          </button>
-          <button className={"chip" + (m.seen ? " on" : "")} onClick={() => onToggle(d.name, "seen")}>
-            👁已见过
-          </button>
-          <button className={"chip" + (m.note ? " on" : "")} onClick={openNote}>
-            ✎笔记
-          </button>
-        </span>
-        {editing ? (
-          <div className="note-edit">
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="记点备注…（识别要点、想拍的姿态、栖息地…）"
-              rows={2}
-              autoFocus
-            />
-            <div className="note-act">
-              <button className="btn sm" onClick={saveNote}>保存</button>
-              <button className="btn sm ghost" onClick={() => setEditing(false)}>取消</button>
-            </div>
-          </div>
-        ) : (
-          m.note && (
-            <div className="note-show" onClick={openNote} title="点击编辑">
-              ✎ {m.note}
-            </div>
-          )
-        )}
-      </div>
-      <div className="freq">
-        <div className="freq-n">
-          {d.frequency_pct}
-          <small>%</small>
-        </div>
-        <button className="where-link" onClick={() => onWhere(d.name)}>
-          📍在哪见过
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function Tier({ cls, name, hint, rows, marks, onToggle, onNote, onWhere }) {
-  if (!rows.length) return null;
-  return (
-    <div className={"tier " + cls}>
-      <div className="tier-h">
-        <span className="bar3">
-          <i></i>
-          <i></i>
-          <i></i>
-        </span>
-        {name} <span className="ct">{hint} · {rows.length} 种</span>
-      </div>
-      {rows.map((d) => (
-        <SpRow
-          key={d.name}
-          d={d}
-          mark={marks[d.name]}
-          onToggle={onToggle}
-          onNote={onNote}
-          onWhere={onWhere}
-        />
-      ))}
-    </div>
-  );
-}
-
-export default function PageList({ stops, stopId, onStop }) {
+export default function PageList({ stops, stopId, onStop, regions = [] }) {
   const [bundle, setBundle] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showReports, setShowReports] = useState(false);
@@ -134,8 +17,11 @@ export default function PageList({ stops, stopId, onStop }) {
   const [whereSpecies, setWhereSpecies] = useState(null);
   const { marks, toggle, setNote, importMarks } = useMarks();
 
+  // 地点停在「地区(市)级」且有概览数据 → 走面→点收敛流程（地图 + 鸟点排行）。
+  const region = regions.find((r) => r.id === stopId);
+
   useEffect(() => {
-    if (!stopId) return;
+    if (!stopId || region) return; // 地区模式不用 trip bundle
     let alive = true;
     setLoading(true);
     (async () => {
@@ -152,16 +38,64 @@ export default function PageList({ stops, stopId, onStop }) {
     return () => {
       alive = false;
     };
-  }, [stopId]);
+  }, [stopId, region]);
 
+  const markCount = Object.keys(marks).length;
+  const targetCount = Object.values(marks).filter((m) => m.target).length;
+
+  // 地点槽：所有停留点下拉（地区模式与名录模式共用）
+  const locSelect = (
+    <select value={stopId} onChange={(e) => onStop(e.target.value)}>
+      {stops.map((s) => (
+        <option key={s.id} value={s.id}>
+          {s.label}
+        </option>
+      ))}
+    </select>
+  );
+
+  // 共用弹窗（两种模式都可能打开）：我的鸟种 / 在哪里见过
+  const sharedModals = (
+    <>
+      {showTargets && (
+        <TargetList
+          marks={marks}
+          toggle={toggle}
+          importMarks={importMarks}
+          onClose={() => setShowTargets(false)}
+        />
+      )}
+      {whereSpecies && (
+        <SpeciesLocations name={whereSpecies} onClose={() => setWhereSpecies(null)} />
+      )}
+    </>
+  );
+
+  // ===== 地区概览模式 =====
+  if (region) {
+    return (
+      <>
+        <PageRegion
+          regionId={stopId}
+          locSelect={locSelect}
+          marks={marks}
+          toggle={toggle}
+          setNote={setNote}
+          onWhere={setWhereSpecies}
+          onShowTargets={() => setShowTargets(true)}
+          markCount={markCount}
+        />
+        {sharedModals}
+      </>
+    );
+  }
+
+  // ===== 名录模式（行程停留点：地点 + 时间 → 鸟种）=====
   const species = bundle?.month_species || [];
   const status = bundle?.data_status;
   const n = bundle?.total_reports_month ?? 0;
   const reports = bundle?.reports || [];
   const stop = stops.find((s) => s.id === stopId);
-
-  const markCount = Object.keys(marks).length;
-  const targetCount = Object.values(marks).filter((m) => m.target).length;
   const shownSpecies = onlyTarget ? species.filter((s) => marks[s.name]?.target) : species;
 
   const years = bundle?.report_years || {};
@@ -171,7 +105,6 @@ export default function PageList({ stops, stopId, onStop }) {
     .join(" + ");
   const pending = reports.filter((r) => !r.has_detail).length;
 
-  // 可点的「N 份报告」→ 打开报告列表弹窗
   const reportLink = reports.length ? (
     <button type="button" className="rlink" onClick={() => setShowReports(true)}>
       {n} 份报告
@@ -198,24 +131,10 @@ export default function PageList({ stops, stopId, onStop }) {
     <div className="wf">
       <div className="wf-desc">行程驱动的「时间 + 地点 → 鸟种」</div>
 
-      <QueryBar
-        where={
-          <select value={stopId} onChange={(e) => onStop(e.target.value)}>
-            {stops.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        }
-        when="6 月（行程月）"
-        what=""
-        answer="what"
-      />
+      <QueryBar where={locSelect} when="6 月（行程月）" what="" answer="what" />
 
       {stop?.region && <div className="region">📍 {stop.region}</div>}
 
-      {/* 季节速读：当前只给事实速读，AI 自然语言摘要在 Backlog */}
       {status !== "none" && species.length > 0 && (
         <div className="concl">
           <span className="k">速读</span>
@@ -297,24 +216,21 @@ export default function PageList({ stops, stopId, onStop }) {
           已收藏 {targetCount} 种目标，但这段 6 月记录里都没出现；可取消「只看目标」看全部。
         </div>
       ) : (
-        TIERS.map((t) => (
-          <Tier
-            key={t.cls}
-            cls={t.cls}
-            name={t.name}
-            hint={t.hint}
-            rows={shownSpecies.filter((s) => t.test(s.frequency_pct))}
-            marks={marks}
-            onToggle={toggle}
-            onNote={setNote}
-            onWhere={setWhereSpecies}
-          />
-        ))
+        <SpeciesChecklist
+          species={shownSpecies}
+          marks={marks}
+          onToggle={toggle}
+          onNote={setNote}
+          onWhere={setWhereSpecies}
+        />
       )}
 
       <div className="take">
         <div className="legend">
-          <span><span className="star">★</span>稀有</span>
+          <span>
+            <span className="rdot" title="局部稀有（在这里这个月不容易撞到）" />
+            稀有
+          </span>
         </div>
         <button className="btn solid" onClick={exportList} disabled={!species.length}>
           ⤓ 导出目标鸟单
@@ -329,18 +245,7 @@ export default function PageList({ stops, stopId, onStop }) {
         />
       )}
 
-      {showTargets && (
-        <TargetList
-          marks={marks}
-          toggle={toggle}
-          importMarks={importMarks}
-          onClose={() => setShowTargets(false)}
-        />
-      )}
-
-      {whereSpecies && (
-        <SpeciesLocations name={whereSpecies} onClose={() => setWhereSpecies(null)} />
-      )}
+      {sharedModals}
     </div>
   );
 }

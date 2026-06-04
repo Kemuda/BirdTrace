@@ -561,6 +561,212 @@ def export_species_locations() -> Path:
     return dst
 
 
+# --- Region overview (地区概览中间页: 面→点收敛) ----------------------------
+# 地点停在「地区」（市/地区级）时，先用地图 + 鸟点排行帮用户从面收敛到一个具体
+# 鸟点，再进该点名录。鸟点 = checklists.point_id（同一 pointId 折叠各种 point_name
+# 写法）。坐标随补抓逐步到位（fetch_report_detail.py 写回 lat/lng），没坐标的点
+# 仍进排行、只是地图不画点（前端按 lat&&lng 过滤）。
+#
+# 排行口径是**全部记录**（不限行程月）——「这个点丰不丰富、可不可靠」要看全部证据，
+# 和 eBird Hotspot 一致；行程月(6月)的过滤留在叶子页（点名录）里说明。
+
+def _region_cities() -> list[dict]:
+    """行程里停在「地区(市)级」的停留点 —— 这些点需要先收敛到具体鸟点。"""
+    return [
+        {"id": s["id"], "label": s["label"], "province": s["province"],
+         "city": s["city"], "region": s.get("region", s["province"])}
+        for s in TRIP_STOPS if _stop_grain(s) == "city"
+    ]
+
+
+def _point_species(conn: sqlite3.Connection, point_id: str) -> tuple[list[dict], int, dict]:
+    """一个鸟点(point_id)的物种聚合（全部记录）+ 总报告数 + 月份直方图。
+
+    频率 = 含该鸟的报告数 ÷ 该点总报告数 × 100（同 eBird frequency 口径，全时段）。
+    """
+    total = conn.execute(
+        "SELECT COUNT(*) FROM checklists WHERE point_id = ?", (point_id,)
+    ).fetchone()[0]
+    months: dict[str, int] = {}
+    for m, cnt in conn.execute(
+        "SELECT strftime('%m', start_time) AS m, COUNT(*) FROM checklists "
+        "WHERE point_id = ? GROUP BY m", (point_id,)
+    ):
+        if m:
+            months[m] = cnt
+    species = []
+    for name, latin, en, code, reports in conn.execute(
+        "SELECT o.taxon_name, MAX(o.latin_name) AS latin, MAX(o.english_name) AS en, "
+        "       NULL AS code, COUNT(DISTINCT c.report_id) AS reports "
+        "FROM checklists c JOIN observations o ON o.report_id = c.report_id "
+        "WHERE c.point_id = ? AND o.taxon_name IS NOT NULL "
+        "GROUP BY o.taxon_name", (point_id,)
+    ):
+        species.append({
+            "name": name,
+            "latin_name": latin,
+            "english_name": en or english_common(name),
+            "links": species_links(name, latin, ebird_code(latin)),
+            "reports": reports,
+            "frequency_pct": round(100.0 * reports / total, 1) if total else 0.0,
+        })
+    species.sort(key=lambda x: (-x["reports"], x["name"]))
+    return species, total, months
+
+
+def _point_reports(conn: sqlite3.Connection, point_id: str) -> list[dict]:
+    """一个鸟点的报告列表（全部记录，报告列表弹窗用）。"""
+    rows = conn.execute(
+        "SELECT report_id, serial_id, start_time, username, point_name, taxon_count "
+        "FROM checklists WHERE point_id = ? ORDER BY start_time DESC", (point_id,)
+    ).fetchall()
+    if not rows:
+        return []
+    ids = [r[0] for r in rows]
+    by_report: dict[str, list] = {rid: [] for rid in ids}
+    ph = ",".join("?" * len(ids))
+    for rid, name, en, cnt in conn.execute(
+        "SELECT report_id, taxon_name, english_name, taxon_count FROM observations "
+        "WHERE report_id IN (" + ph + ") AND taxon_name IS NOT NULL", ids,
+    ):
+        by_report.setdefault(rid, []).append(
+            {"name": name, "english_name": en or english_common(name), "count": cnt}
+        )
+    out = []
+    for rid, serial, t, user, point, declared in rows:
+        sp = sorted(by_report.get(rid, []), key=lambda x: x["name"])
+        out.append({
+            "report_id": rid, "serial": serial, "time": t, "user": user,
+            "point_name": point, "declared_count": declared,
+            "species": sp, "has_detail": bool(sp),
+        })
+    return out
+
+
+def region_bundle(conn: sqlite3.Connection, city_meta: dict) -> tuple[dict, list[str]]:
+    """一个地区(市)的鸟点排行 + 概览。返回 (bundle, 该地区的 point_id 列表)。"""
+    province, city = city_meta["province"], city_meta["city"]
+    # 每个鸟点：清单数 nck / 鸟种数 nsp / 种单 spc / 坐标 / 代表名 / 常见鸟 top
+    spots: list[dict] = []
+    point_ids: list[str] = []
+    for (pid,) in conn.execute(
+        "SELECT DISTINCT point_id FROM checklists "
+        "WHERE province = ? AND city = ? AND point_id IS NOT NULL",
+        (province, city),
+    ):
+        nck, lat, lng = conn.execute(
+            "SELECT COUNT(*), AVG(lat), AVG(lng) FROM checklists WHERE point_id = ?",
+            (pid,),
+        ).fetchone()
+        # 代表名 = 出现最多的 point_name 写法
+        name = conn.execute(
+            "SELECT point_name FROM checklists WHERE point_id = ? AND point_name IS NOT NULL "
+            "GROUP BY point_name ORDER BY COUNT(*) DESC LIMIT 1", (pid,)
+        ).fetchone()
+        name = name[0] if name else pid
+        rows = conn.execute(
+            "SELECT o.taxon_name, COUNT(DISTINCT c.report_id) AS r "
+            "FROM checklists c JOIN observations o ON o.report_id = c.report_id "
+            "WHERE c.point_id = ? AND o.taxon_name IS NOT NULL "
+            "GROUP BY o.taxon_name ORDER BY r DESC, o.taxon_name", (pid,)
+        ).fetchall()
+        nsp = len(rows)
+        top = [r[0] for r in rows[:6]]
+        spots.append({
+            "id": pid, "name": name,
+            "lat": round(lat, 5) if lat is not None else None,
+            "lng": round(lng, 5) if lng is not None else None,
+            "nck": nck, "nsp": nsp,
+            "spc": round(nsp / nck, 1) if nck else 0,
+            "top": top,
+        })
+        point_ids.append(pid)
+    spots.sort(key=lambda s: (-s["nsp"], -s["nck"], s["name"]))
+
+    # 概览：总清单 / 总观测 / 鸟点数 / 时间跨度 / 月份直方图
+    checklists, first, last = conn.execute(
+        "SELECT COUNT(*), MIN(start_time), MAX(start_time) FROM checklists "
+        "WHERE province = ? AND city = ?", (province, city),
+    ).fetchone()
+    obs = conn.execute(
+        "SELECT COUNT(*) FROM observations o JOIN checklists c ON o.report_id = c.report_id "
+        "WHERE c.province = ? AND c.city = ?", (province, city),
+    ).fetchone()[0]
+    months = {
+        m: cnt for m, cnt in conn.execute(
+            "SELECT strftime('%m', start_time) AS m, COUNT(*) FROM checklists "
+            "WHERE province = ? AND city = ? GROUP BY m", (province, city),
+        ) if m
+    }
+    with_coords = sum(1 for s in spots if s["lat"] is not None)
+    bundle = {
+        "id": city_meta["id"], "label": city_meta["label"], "region": city_meta["region"],
+        "province": province, "city": city,
+        "overview": {
+            "checklists": checklists, "obs": obs, "hotspots": len(spots),
+            "with_coords": with_coords, "first": first, "last": last, "months": months,
+        },
+        "spots": spots,
+    }
+    return bundle, point_ids
+
+
+def point_bundle(conn: sqlite3.Connection, point_id: str, region: str) -> dict:
+    """一个鸟点的叶子页名录（全部记录）—— 点排行里某行 → 进这个。"""
+    species, total, months = _point_species(conn, point_id)
+    name = conn.execute(
+        "SELECT point_name FROM checklists WHERE point_id = ? AND point_name IS NOT NULL "
+        "GROUP BY point_name ORDER BY COUNT(*) DESC LIMIT 1", (point_id,)
+    ).fetchone()
+    status = "none" if total == 0 else ("thin" if total < THIN_SAMPLE else "ok")
+    # 月份分布（哪个季节样本多，叶子页诚实标注）
+    top_months = sorted(months.items(), key=lambda kv: -kv[1])
+    return {
+        "id": point_id,
+        "name": name[0] if name else point_id,
+        "region": region,
+        "total_reports": total,
+        "species_count": len(species),
+        "data_status": status,
+        "months": months,
+        "peak_month": (top_months[0][0] if top_months else None),
+        "species": species,
+        "reports": _point_reports(conn, point_id),
+    }
+
+
+def export_regions() -> list[Path]:
+    """地区概览文件：每个地区一份排行(spots) + 该地区每个鸟点一份叶子名录。"""
+    out: list[Path] = []
+    reg_dir = OUT_DIR / "regions"
+    pt_dir = reg_dir / "points"
+    pt_dir.mkdir(parents=True, exist_ok=True)
+    manifest = []
+    with connect() as conn:
+        for cm in _region_cities():
+            bundle, point_ids = region_bundle(conn, cm)
+            dst = reg_dir / f"{bundle['id']}.json"
+            dst.write_text(json.dumps(bundle, ensure_ascii=False, indent=2), encoding="utf-8")
+            out.append(dst)
+            manifest.append({
+                "id": bundle["id"], "label": bundle["label"], "region": bundle["region"],
+                "province": bundle["province"], "city": bundle["city"],
+                "hotspots": bundle["overview"]["hotspots"],
+                "with_coords": bundle["overview"]["with_coords"],
+                "checklists": bundle["overview"]["checklists"],
+            })
+            for pid in point_ids:
+                pb = point_bundle(conn, pid, bundle["region"])
+                (pt_dir / f"{pid}.json").write_text(
+                    json.dumps(pb, ensure_ascii=False, indent=2), encoding="utf-8")
+                out.append(pt_dir / f"{pid}.json")
+    man_dst = reg_dir / "manifest.json"
+    man_dst.write_text(json.dumps({"regions": manifest}, ensure_ascii=False, indent=2),
+                       encoding="utf-8")
+    out.append(man_dst)
+    return out
+
+
 def export_trip() -> list[Path]:
     """Write one bundle per trip stop + an ordered manifest."""
     out: list[Path] = []
@@ -568,6 +774,7 @@ def export_trip() -> list[Path]:
     trip_dir.mkdir(parents=True, exist_ok=True)
     out.append(export_ebird_bridge())
     out.append(export_species_locations())
+    out.extend(export_regions())   # 地区概览（面→点收敛）随行程一起导出
     manifest = []
     with connect() as conn:
         for stop in TRIP_STOPS:
@@ -603,6 +810,9 @@ def main() -> None:
     parser.add_argument("--trip", action="store_true",
                         help="export per-stop trip bundles + manifest (MVP 名录页: "
                              "地点+时间→鸟种, see docs/mvp-trip.md)")
+    parser.add_argument("--regions", action="store_true",
+                        help="export 地区概览 (面→点收敛: 鸟点排行 + 每点叶子名录)。"
+                             "--trip 已含此步，单独用于只刷地区数据。")
     args = parser.parse_args()
 
     out = export_provinces_summary()
@@ -636,6 +846,13 @@ def main() -> None:
             return
         for p in export_trip():
             print(f"wrote {p}")
+
+    if args.regions and not args.trip:
+        if not DB_PATH.exists():
+            print(f"skipping regions export: {DB_PATH} not built yet")
+            return
+        paths = export_regions()
+        print(f"wrote {len(paths)} region/point files (manifest: {paths[-1]})")
 
 
 if __name__ == "__main__":

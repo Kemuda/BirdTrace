@@ -18,6 +18,7 @@
   --hand: #3b5c8a;
   --present: #3f7d57; /* 在 */
   --gone: #b9b3a7; /* 走 */
+  --rare: #b0492f; /* 局部稀有红点（= 撞大运档） */
 }
 * {
   box-sizing: border-box;
@@ -1039,4 +1040,610 @@ body {
 }
 .foot a {
   color: var(--hand);
+}
+
+/* ============================================================
+   v3 名录 web 行（.wr）—— 标记露出 · 概率条居中 · 在哪见过在频率下方 ·
+   外链 hover 展开 · 内联可编辑笔记 · 局部稀有红点。移植自 birdtrace-mockup-v3。
+   ============================================================ */
+.wlist-h {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) 128px auto;
+  gap: 14px;
+  padding: 9px 8px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  border-bottom: 1.5px solid var(--line-soft);
+  white-space: nowrap;
+}
+.wlist-h .c {
+  text-align: center;
+}
+.wr {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) 128px auto;
+  gap: 14px;
+  align-items: center;
+  padding: 11px 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.wr:hover {
+  background: var(--paper-2);
+}
+.wr .nm {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.wr .cnl {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.wr .wcn {
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.wr .wen {
+  font-size: 11px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wrdot,
+.rdot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--rare);
+  display: inline-block;
+}
+.wr .wfreq {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.wr .wfn {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink);
+}
+.wr .wfn small {
+  font-size: 10px;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+.wr .wfb {
+  width: 72px;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--paper-2);
+  overflow: hidden;
+}
+.wr .wfb i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--ink-soft);
+}
+.tier-must .wfb i {
+  background: var(--ink);
+}
+.tier-mid .wfb i {
+  background: var(--ink-soft);
+}
+.tier-rare .wfb i {
+  background: var(--line);
+}
+.tier-rare .wfn {
+  color: var(--ink-soft);
+}
+.wr .wwhere {
+  margin-top: 3px;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--hand);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-bottom: 1px dotted var(--hand);
+}
+.wr .wwhere:hover {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+.wr .wmarks {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.wmk {
+  font-family: inherit;
+  font-size: 12px;
+  border: 1.5px solid var(--line-soft);
+  background: #fff;
+  color: var(--ink-soft);
+  border-radius: 20px;
+  padding: 3px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.wmk:hover {
+  border-color: var(--line);
+}
+.wmk.on {
+  border-color: var(--ink);
+  background: var(--paper-2);
+  color: var(--ink);
+  font-weight: 600;
+}
+.wmk.on.seen {
+  border-color: var(--present);
+  color: var(--present);
+  background: #eaf3ee;
+}
+.wr .wlinks {
+  display: none;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 13px;
+  margin-top: 8px;
+}
+.wr:hover .wlinks {
+  display: flex;
+}
+.wlinks .lk-lab {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+.wlinks a {
+  font-size: 12px;
+  color: var(--hand);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--hand);
+}
+.wlinks a:hover {
+  color: var(--ink);
+}
+.wr .wnote {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: #6a5410;
+  background: #fff7e0;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  padding: 6px 10px;
+  margin-top: 7px;
+  line-height: 1.45;
+  outline: none;
+}
+.wr .wnote:empty:before {
+  content: attr(data-ph);
+  color: var(--line);
+}
+
+/* ============================================================
+   v3 地区概览（面→点收敛）—— 收敛步骤条 / 面包屑 / 地图 / 鸟点排行。
+   ============================================================ */
+.converge {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  padding: 2px 0;
+  flex-wrap: wrap;
+}
+.converge .st {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-soft);
+}
+.converge .st .ic {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-family: "JetBrains Mono", monospace;
+}
+.converge .st.done {
+  color: var(--ink);
+}
+.converge .st.done .ic {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+.converge .st.cur {
+  color: #8a6a14;
+  font-weight: 600;
+}
+.converge .st.cur .ic {
+  border-color: var(--hi-line);
+  background: var(--hi);
+  color: #5e4708;
+}
+.converge .arr {
+  color: var(--line);
+}
+.rg-crumb {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.rg-crumb a {
+  color: var(--ink-soft);
+  cursor: pointer;
+  text-decoration: none;
+}
+.rg-crumb a:hover {
+  color: var(--ink);
+}
+.rg-crumb a.cur {
+  color: var(--ink);
+  font-weight: 600;
+}
+.rg-crumb .redo {
+  margin-left: auto;
+  color: var(--hand);
+  cursor: pointer;
+}
+.slot.region-on {
+  border-color: var(--ink);
+}
+.slot .val .lv {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--hand);
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  padding: 1px 5px;
+  margin-left: 6px;
+}
+.concl .v b {
+  border-bottom: 2px solid var(--hi-line);
+}
+.sortbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  flex-wrap: wrap;
+}
+.sortbtn {
+  border: 1.5px solid var(--line-soft);
+  background: #fff;
+  color: var(--ink-soft);
+  border-radius: 20px;
+  padding: 3px 11px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sortbtn.on {
+  border-color: var(--ink);
+  color: var(--ink);
+  font-weight: 600;
+  background: var(--paper-2);
+}
+#map {
+  height: 340px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line-soft);
+}
+.map-cap {
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-top: -8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.map-cap .swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+  vertical-align: middle;
+}
+.splist {
+  display: flex;
+  flex-direction: column;
+}
+.splist-h {
+  display: grid;
+  grid-template-columns: 30px 1fr 86px 64px 24px;
+  gap: 10px;
+  padding: 0 8px 7px;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  border-bottom: 1.5px solid var(--line-soft);
+}
+.splist-h .r {
+  text-align: right;
+}
+.sprow {
+  display: grid;
+  grid-template-columns: 30px 1fr 86px 64px 24px;
+  gap: 10px;
+  align-items: center;
+  padding: 11px 8px;
+  border-top: 1px solid var(--line-soft);
+  cursor: pointer;
+}
+.sprow:first-of-type {
+  border-top: none;
+}
+.sprow:hover {
+  background: var(--paper-2);
+}
+.sprow .rank {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  text-align: center;
+}
+.sprow.top1 .rank {
+  color: var(--hi-line);
+}
+.spname {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.spname .nm {
+  font-size: 15px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.spname .nm .cn {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.star-badge {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: #5e4708;
+  background: var(--hi);
+  border: 1.5px solid var(--hi-line);
+  border-radius: 20px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+.spname .birds {
+  font-size: 11px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.spname .birds b {
+  color: var(--ink);
+  font-weight: 500;
+}
+.metricbig {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+.metricbig .n {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink);
+}
+.metricbig .n small {
+  font-size: 9px;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-left: 1px;
+}
+.metricbig .b {
+  width: 78px;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--paper-2);
+  overflow: hidden;
+}
+.metricbig .b i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--ink);
+}
+.metric2 {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: right;
+}
+.go {
+  color: var(--line);
+  font-size: 15px;
+  text-align: center;
+}
+.sprow:hover .go {
+  color: var(--ink);
+}
+.tag1 {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  color: var(--gone);
+  border: 1.5px solid var(--line-soft);
+  border-radius: 5px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+.sprow.weak {
+  color: var(--gone);
+}
+.sprow.weak .spname .nm,
+.sprow.weak .metricbig .n,
+.sprow.weak .rank {
+  color: var(--gone);
+}
+.sprow.weak .metricbig .b i {
+  background: var(--line);
+}
+.sprow.weak .spname .birds b {
+  color: var(--ink-soft);
+}
+.more {
+  text-align: center;
+  padding: 13px;
+  font-size: 13px;
+  color: var(--hand);
+  cursor: pointer;
+  border-top: 1px solid var(--line-soft);
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  width: 100%;
+  font-family: inherit;
+}
+.more:hover {
+  background: var(--paper-2);
+}
+.rg-foot {
+  font-size: 11px;
+  color: var(--ink-soft);
+  line-height: 1.6;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 12px;
+}
+.rg-foot b {
+  color: var(--ink);
+}
+.leaflet-popup-content {
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.leaflet-popup-content .pn {
+  font-weight: 700;
+}
+.leaflet-popup-content .pm {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: #6c685f;
+  margin: 3px 0;
+}
+.leaflet-popup-content .pb {
+  color: #555;
+  font-size: 12px;
+}
+.leaflet-popup-content .pgo {
+  display: inline-block;
+  margin-top: 6px;
+  color: #3b5c8a;
+  font-weight: 600;
+  cursor: pointer;
+}
+/* 地图 Shift 框选放大 */
+.bz-ctl {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--paper);
+  border: 1.5px solid var(--line-soft);
+  border-radius: 8px;
+  padding: 4px 5px 4px 9px;
+  box-shadow: 0 1px 4px rgba(51, 49, 44, 0.12);
+}
+.bz-hint {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.bz-reset {
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 11px;
+  color: var(--ink);
+  background: #fff;
+  border: 1.5px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 9px;
+  cursor: pointer;
+}
+.bz-reset:hover {
+  background: var(--paper-2);
+}
+#map.bz-arm {
+  cursor: crosshair;
+}
+.leaflet-zoom-box {
+  border: 1.5px solid var(--hi-line) !important;
+  background: rgba(217, 169, 46, 0.18) !important;
+}
+
+/* 在哪见过 modal —— 分区头 + 当前选定标（mockup 有、旧 css 缺） */
+.loc-sec-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 10px 18px 6px;
+  background: var(--paper-2);
+  border-top: 1px solid var(--line-soft);
+}
+.loc-sec-h:first-child {
+  border-top: none;
+}
+.loc-sec-h .ct {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.loc-cur {
+  font-size: 10px;
+  font-weight: 600;
+  color: #8a6a14;
+  background: var(--hi);
+  border: 1px solid var(--hi-line);
+  border-radius: 5px;
+  padding: 1px 6px;
+  white-space: nowrap;
+  margin-left: 6px;
 }

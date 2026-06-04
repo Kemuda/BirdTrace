@@ -24,6 +24,7 @@ export default function App() {
   const [stopId, setStopId] = useState("");
   const [provinces, setProvinces] = useState(["云南", "西藏"]);
   const [taxa, setTaxa] = useState([]);
+  const [regions, setRegions] = useState([]);
 
   useEffect(() => {
     (async () => {
@@ -65,6 +66,15 @@ export default function App() {
       } catch {
         /* leave empty */
       }
+      try {
+        const r = await fetch("/data/regions/manifest.json");
+        if (r.ok) {
+          const m = await r.json();
+          if (Array.isArray(m.regions)) setRegions(m.regions);
+        }
+      } catch {
+        /* 无地区概览数据时，名录页按停留点直出 */
+      }
     })();
   }, []);
 
@@ -98,7 +108,9 @@ export default function App() {
         ))}
       </div>
 
-      {page === "list" && <PageList stops={stops} stopId={stopId} onStop={setStopId} />}
+      {page === "list" && (
+        <PageList stops={stops} stopId={stopId} onStop={setStopId} regions={regions} />
+      )}
       {page === "chart" && <PageChart provinces={provinces} taxa={taxa} />}
       {page === "map" && <PageMap />}
 
