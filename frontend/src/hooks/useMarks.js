@@ -95,7 +95,11 @@ export function useMarks() {
     []
   );
 
-  const setNote = useCallback((name, note) => apply(name, { note }), [apply]);
+  // 记了笔记就自动标「已学习」（Amber）。清空笔记不取消已学习（可能已独立学过）。
+  const setNote = useCallback(
+    (name, note) => apply(name, note ? { note, learned: true } : { note: "" }),
+    [apply]
+  );
 
   // 备份导入：merge（默认，补充已见过等）或 replace（整体覆盖）
   const importMarks = useCallback((obj, mode = "merge") => {

@@ -62,9 +62,6 @@ function SpRow({ d, mark, onToggle, onNote, onWhere }) {
           <button className={"chip" + (m.note ? " on" : "")} onClick={openNote}>
             ✎笔记
           </button>
-          <button className="chip" onClick={() => onWhere(d.name)}>
-            📍在哪见过
-          </button>
         </span>
         {editing ? (
           <div className="note-edit">
@@ -89,8 +86,13 @@ function SpRow({ d, mark, onToggle, onNote, onWhere }) {
         )}
       </div>
       <div className="freq">
-        {d.frequency_pct}
-        <small>%</small>
+        <div className="freq-n">
+          {d.frequency_pct}
+          <small>%</small>
+        </div>
+        <button className="where-link" onClick={() => onWhere(d.name)}>
+          📍在哪见过
+        </button>
       </div>
     </div>
   );
