@@ -18,6 +18,66 @@ from build_db import DB_PATH, connect
 ROOT = Path(__file__).resolve().parents[2]
 RAW_DIR = ROOT / "data" / "raw"
 OUT_DIR = ROOT / "frontend" / "public" / "data"
+REFS_DIR = RAW_DIR / "refs"
+
+
+# --- eBird link map (vendored from github.com/CKRainbow/commonBird) ----------
+# sciName -> [speciesCode, comName]; plus ch4_to_eb fixes the ~98 names where
+# birdreport's 学名 differs from eBird's. Lets us link each species to its
+# ebird.org/species/<code> page. Loaded once, lazily.
+_EBIRD_SCI: dict | None = None
+_CH4_FIX: dict | None = None
+
+
+def _ebird_refs() -> tuple[dict, dict]:
+    global _EBIRD_SCI, _CH4_FIX
+    if _EBIRD_SCI is None:
+        sci_path = REFS_DIR / "ebird_sci_to_code.json"
+        ch4_path = REFS_DIR / "ch4_to_eb_taxon_map.json"
+        _EBIRD_SCI = json.loads(sci_path.read_text(encoding="utf-8")) if sci_path.exists() else {}
+        _CH4_FIX = json.loads(ch4_path.read_text(encoding="utf-8")) if ch4_path.exists() else {}
+    return _EBIRD_SCI, _CH4_FIX
+
+
+def ebird_code(latin: str | None) -> str | None:
+    """birdreport 学名 -> eBird speciesCode (None if no match)."""
+    if not latin:
+        return None
+    sci, fix = _ebird_refs()
+    name = fix.get(latin, latin)
+    if isinstance(name, list):  # taxonomic split -> take first eBird name
+        first = name[0]
+        name = (first.get("name", "") if isinstance(first, dict) else first).split("/")[0]
+    hit = sci.get(name) or sci.get(latin)
+    return hit[0] if hit else None
+
+
+# --- 居留型推断（留鸟/夏候鸟/冬候鸟/旅鸟/不确定）-----------------------------
+# 没有现成的居留型数据源（commonBird/eBird 都没有该字段），所以从**省级 12 个月
+# 出现模式**推断：只在「有采样努力」的月份判断在/不在，两季都采样到才敢下留/候鸟
+# 的结论，否则诚实地标「不确定」（西藏只有 6 月数据 → 基本都是不确定）。
+_BREED = {3, 4, 5, 6}   # idx → 4–7 月，繁殖季
+_WINTER = {11, 0, 1}    # 12,1,2 月，越冬季
+_PASSAGE = {2, 7, 8, 9}  # 3,8,9,10 月，过境季（近似）
+
+
+def classify_seasonal(monthly: list[int], total_reports: list[int]) -> str:
+    sampled = {i for i in range(12) if total_reports[i] > 0}
+    present = {i for i in sampled if monthly[i] > 0}
+    if not present:
+        return "不确定"
+    in_breed, in_winter = bool(_BREED & present), bool(_WINTER & present)
+    breed_sampled, winter_sampled = _BREED & sampled, _WINTER & sampled
+    if breed_sampled and winter_sampled:
+        if in_breed and in_winter:
+            return "留鸟"
+        if in_breed:
+            return "夏候鸟"
+        if in_winter:
+            return "冬候鸟"
+    if present and present <= _PASSAGE:   # 只在过境季出现
+        return "旅鸟"
+    return "不确定"
 
 # LEFT JOIN from the monthly checklist totals so months with sampling effort
 # but zero observations of the target species still report `0 / total_reports`
@@ -176,6 +236,7 @@ def _bundle(conn: sqlite3.Connection, province: str,
             {
                 "name": e["name"],
                 "latin_name": e["latin_name"],
+                "ebird_code": ebird_code(e["latin_name"]),
                 "monthly": [e["monthly"][m] for m in months],
             }
             for e in sorted(species_acc.values(), key=lambda x: x["name"])
@@ -261,8 +322,14 @@ def _stop_grain(stop: dict) -> str:
     return "province"
 
 
-def trip_stop_bundle(conn: sqlite3.Connection, stop: dict) -> dict:
-    """Build one stop's bundle + honesty metadata for the trip month."""
+def trip_stop_bundle(conn: sqlite3.Connection, stop: dict,
+                     seasonal_map: dict | None = None) -> dict:
+    """Build one stop's bundle + honesty metadata for the trip month.
+
+    `seasonal_map`: province-level {species_name -> 居留型} (留鸟/夏候鸟/…) so
+    each row can show seasonal occurrence instead of a raw rhythm sparkline.
+    """
+    seasonal_map = seasonal_map or {}
     bundle = _bundle(conn, stop["province"], stop.get("districts", ()),
                      stop.get("city"), stop.get("points", ()))
     mi = int(TRIP_MONTH) - 1
@@ -272,6 +339,8 @@ def trip_stop_bundle(conn: sqlite3.Connection, stop: dict) -> dict:
         {
             "name": s["name"],
             "latin_name": s["latin_name"],
+            "ebird_code": s.get("ebird_code"),
+            "seasonal": seasonal_map.get(s["name"], "不确定"),
             "reports": s["monthly"][mi],
             "frequency_pct": round(100.0 * s["monthly"][mi] / total, 1) if total else 0.0,
         }
@@ -302,8 +371,17 @@ def export_trip() -> list[Path]:
     trip_dir.mkdir(parents=True, exist_ok=True)
     manifest = []
     with connect() as conn:
+        # 居留型按**省级**全年模式判定（居留型是区域属性，不是某个点位的属性），
+        # 各停留点的物种按名字查表。黑颈鹤在云南判为冬候、在西藏(仅6月)判不确定 —— 正确。
+        seasonal_by_prov: dict[str, dict] = {}
+        for prov in dict.fromkeys(s["province"] for s in TRIP_STOPS):
+            pb = _bundle(conn, prov)
+            tot = pb["total_reports"]
+            seasonal_by_prov[prov] = {
+                sp["name"]: classify_seasonal(sp["monthly"], tot) for sp in pb["species"]
+            }
         for stop in TRIP_STOPS:
-            b = trip_stop_bundle(conn, stop)
+            b = trip_stop_bundle(conn, stop, seasonal_by_prov.get(stop["province"], {}))
             dst = trip_dir / f"{b['id']}.json"
             dst.write_text(json.dumps(b, ensure_ascii=False, indent=2), encoding="utf-8")
             out.append(dst)

@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import QueryBar from "../components/QueryBar.jsx";
-import Spark from "../components/Spark.jsx";
 
 // 频率分层：几乎必见 / 有机会 / 撞大运·稀有。
 const TIERS = [
@@ -9,18 +8,36 @@ const TIERS = [
   { cls: "tier-rare", name: "撞大运 · 稀有", hint: "<20%", test: (f) => f < 20 },
 ];
 
-function SpRow({ d, monthly }) {
+// 居留型 → 配色 class。居留型由后端从省级全年模式推断（见 export_json.py）。
+const SEASON_CLS = {
+  留鸟: "resident",
+  夏候鸟: "summer",
+  冬候鸟: "winter",
+  旅鸟: "passage",
+  不确定: "uncertain",
+};
+
+function SpRow({ d }) {
   const rare = d.frequency_pct < 20;
+  const eb = d.ebird_code ? `https://ebird.org/species/${d.ebird_code}` : null;
   return (
     <div className="row">
       <div className="sp-name">
         <span className="cn">
-          {d.name}
+          {eb ? (
+            <a href={eb} target="_blank" rel="noreferrer" title="在 eBird 上查看">
+              {d.name}
+            </a>
+          ) : (
+            d.name
+          )}
           {rare && <span className="star">★</span>}
         </span>
         <span className="la">{d.latin_name || ""}</span>
       </div>
-      <Spark data={monthly} />
+      <span className={"season " + (SEASON_CLS[d.seasonal] || "uncertain")}>
+        {d.seasonal}
+      </span>
       <div className="freq">
         {d.frequency_pct}
         <small>%</small>
@@ -29,7 +46,7 @@ function SpRow({ d, monthly }) {
   );
 }
 
-function Tier({ cls, name, hint, rows, monthlyOf }) {
+function Tier({ cls, name, hint, rows }) {
   if (!rows.length) return null;
   return (
     <div className={"tier " + cls}>
@@ -42,7 +59,7 @@ function Tier({ cls, name, hint, rows, monthlyOf }) {
         {name} <span className="ct">{hint} · {rows.length} 种</span>
       </div>
       {rows.map((d) => (
-        <SpRow key={d.name} d={d} monthly={monthlyOf(d.name)} />
+        <SpRow key={d.name} d={d} />
       ))}
     </div>
   );
@@ -71,12 +88,6 @@ export default function PageList({ stops, stopId, onStop }) {
       alive = false;
     };
   }, [stopId]);
-
-  // name -> 12-month counts, for the per-row sparkline (全年节律).
-  const monthlyOf = useMemo(() => {
-    const map = new Map((bundle?.species || []).map((s) => [s.name, s.monthly]));
-    return (name) => map.get(name) || [];
-  }, [bundle]);
 
   const species = bundle?.month_species || [];
   const status = bundle?.data_status;
@@ -159,17 +170,18 @@ export default function PageList({ stops, stopId, onStop }) {
             name={t.name}
             hint={t.hint}
             rows={species.filter((s) => t.test(s.frequency_pct))}
-            monthlyOf={monthlyOf}
           />
         ))
       )}
 
       <div className="take">
         <div className="legend">
-          <span>
-            <span className="star">★</span> 稀有
-          </span>
-          <span>↗ 火花线＝全年节律</span>
+          <span><span className="season resident">留鸟</span></span>
+          <span><span className="season summer">夏候鸟</span></span>
+          <span><span className="season winter">冬候鸟</span></span>
+          <span><span className="season passage">旅鸟</span></span>
+          <span><span className="season uncertain">不确定</span></span>
+          <span><span className="star">★</span>稀有 · 点鸟名→eBird</span>
         </div>
         <button className="btn solid" onClick={exportList} disabled={!species.length}>
           ⤓ 导出当日目标鸟单

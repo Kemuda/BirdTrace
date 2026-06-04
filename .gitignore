@@ -222,3 +222,7 @@ data/raw/
 data/db/
 data/scraper/*_sample.json
 frontend/public/data/
+# …but DO track the vendored reference maps (eBird taxonomy / ch4 fixes) —
+# the export needs them to build species links; they're not scraped artifacts.
+!data/raw/refs/
+!data/raw/refs/**

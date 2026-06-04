@@ -32,9 +32,12 @@ export default function App() {
           const m = await r.json();
           if (Array.isArray(m.stops) && m.stops.length) {
             setStops(m.stops);
-            // 默认选第一个有数据的停留点，避免一进来就是空页
-            const firstWithData = m.stops.find((s) => s.data_status !== "none");
-            setStopId((firstWithData || m.stops[0]).id);
+            // 默认选第一个**有物种明细**的停留点（光有报告数不够，没 observation
+            // 就是空清单），避免一进来就是空页。
+            const firstWithSpecies =
+              m.stops.find((s) => s.species_count_month > 0) ||
+              m.stops.find((s) => s.data_status !== "none");
+            setStopId((firstWithSpecies || m.stops[0]).id);
           }
         }
       } catch {

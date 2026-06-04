@@ -2,6 +2,18 @@
 
 This project's birdreport.cn API client (request signing, RSA-chunked request encryption, and AES-CBC response decryption) is adapted from two upstream open-source projects. Both are MIT-licensed.
 
+## commonBird
+
+- Repository: https://github.com/CKRainbow/commonBird
+- License: MIT
+- Vendored into `data/raw/refs/`:
+  - `ebird_sci_to_code.json` — slimmed from commonBird's `ebird_taxonomy.json`
+    (eBird scientific name → speciesCode + common name). Used to link each
+    species to its `ebird.org/species/<code>` page.
+  - `ch4_to_eb_taxon_map.json` — birdreport(CH4) → eBird 学名 reconciliation
+    (~98 names that differ taxonomically), so the eBird join matches.
+- The underlying eBird taxonomy is © Cornell Lab of Ornithology.
+
 ## qBird
 
 - Repository: https://github.com/TaQini/qBird
