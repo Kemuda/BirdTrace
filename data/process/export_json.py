@@ -266,9 +266,9 @@ def _bundle(conn: sqlite3.Connection, province: str,
         )
     }
     species_acc: dict[str, dict] = {}
-    for taxon, latin, m, cnt in conn.execute(
-        "SELECT o.taxon_name, o.latin_name, strftime('%m', c.start_time) AS m, "
-        "COUNT(DISTINCT c.report_id) AS cnt "
+    for taxon, latin, en, m, cnt in conn.execute(
+        "SELECT o.taxon_name, o.latin_name, MAX(o.english_name) AS en, "
+        "strftime('%m', c.start_time) AS m, COUNT(DISTINCT c.report_id) AS cnt "
         "FROM checklists c JOIN observations o ON c.report_id = o.report_id "
         "WHERE c.province = :province AND o.taxon_name IS NOT NULL"
         + _filters("c.", districts, city, points)
@@ -276,9 +276,12 @@ def _bundle(conn: sqlite3.Connection, province: str,
         params,
     ):
         entry = species_acc.setdefault(
-            taxon, {"name": taxon, "latin_name": latin, "monthly": {x: 0 for x in months}}
+            taxon, {"name": taxon, "latin_name": latin, "english_name": None,
+                    "monthly": {x: 0 for x in months}}
         )
         entry["monthly"][m] = cnt
+        if en and not entry["english_name"]:   # birdreport 自带英文名（100% 覆盖）
+            entry["english_name"] = en
 
     return {
         "province": province,
@@ -287,6 +290,7 @@ def _bundle(conn: sqlite3.Connection, province: str,
             {
                 "name": e["name"],
                 "latin_name": e["latin_name"],
+                "english_name": e["english_name"],
                 "ebird_code": ebird_code(e["latin_name"]),
                 "monthly": [e["monthly"][m] for m in months],
             }
@@ -423,13 +427,13 @@ def _stop_reports(conn: sqlite3.Connection, stop: dict) -> list[dict]:
     ids = [r[0] for r in rows]
     by_report: dict[str, list] = {rid: [] for rid in ids}
     ph = ",".join("?" * len(ids))
-    for rid, name, latin, cnt in conn.execute(
-        "SELECT report_id, taxon_name, latin_name, taxon_count FROM observations "
+    for rid, name, en, cnt in conn.execute(
+        "SELECT report_id, taxon_name, english_name, taxon_count FROM observations "
         "WHERE report_id IN (" + ph + ") AND taxon_name IS NOT NULL",
         ids,
     ):
         by_report.setdefault(rid, []).append(
-            {"name": name, "english_name": english_common(name), "count": cnt}
+            {"name": name, "english_name": en or english_common(name), "count": cnt}
         )
 
     out = []
@@ -463,7 +467,7 @@ def trip_stop_bundle(conn: sqlite3.Connection, stop: dict) -> dict:
         {
             "name": s["name"],
             "latin_name": s["latin_name"],
-            "english_name": english_common(s["name"]),
+            "english_name": s.get("english_name") or english_common(s["name"]),
             "links": species_links(s["name"], s["latin_name"], s.get("ebird_code")),
             "reports": s["monthly"][mi],
             "frequency_pct": round(100.0 * s["monthly"][mi] / total, 1) if total else 0.0,

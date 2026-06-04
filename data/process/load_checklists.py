@@ -32,8 +32,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
 OBSERVATION_INSERT = """
 INSERT INTO observations
-    (report_id, taxon_id, taxon_name, latin_name, taxon_count)
-VALUES (?, ?, ?, ?, ?)
+    (report_id, taxon_id, taxon_name, latin_name, english_name, taxon_count)
+VALUES (?, ?, ?, ?, ?, ?)
 """
 
 
@@ -119,6 +119,7 @@ def load_observations(conn: sqlite3.Connection) -> int:
                 _first(rec, "taxon_id", "taxonId"),
                 _first(rec, "taxon_name", "taxonName"),
                 _first(rec, "latinname", "latin_name", "latinName"),
+                _first(rec, "englishname", "english_name", "englishName"),
                 _first(rec, "taxon_count", "taxonCount"),
             ))
             rows += 1

@@ -24,7 +24,7 @@ CREATE TABLE checklists (
 );
 CREATE TABLE observations (
     id INTEGER PRIMARY KEY AUTOINCREMENT, report_id TEXT,
-    taxon_id INTEGER, taxon_name TEXT, latin_name TEXT, taxon_count INTEGER
+    taxon_id INTEGER, taxon_name TEXT, latin_name TEXT, english_name TEXT, taxon_count INTEGER
 );
 """
 
