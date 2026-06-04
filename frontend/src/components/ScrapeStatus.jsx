@@ -53,7 +53,12 @@ export default function ScrapeStatus() {
 
   if (!s || (!s.running && !s.stalled && !s.done)) return null;
   const pct = s.target_total ? Math.round((s.have_total / s.target_total) * 100) : 0;
-  const cls = "scrape" + (s.stalled ? " stalled" : s.done ? " done" : "");
+  const remaining = Math.max((s.target_total || 0) - (s.have_total || 0), 0);
+  const trulyDone = s.done && remaining === 0;       // 真抓全了
+  const endedShort = s.done && remaining > 0;         // 进程结束但没抓全（到上限/放弃）
+  const cls =
+    "scrape" +
+    (s.stalled ? " stalled" : trulyDone ? " done" : endedShort ? " paused" : "");
 
   return (
     <div className={cls}>
@@ -91,8 +96,10 @@ export default function ScrapeStatus() {
         <b>
           {s.stalled
             ? "⚠ 鸟种明细补抓卡住了"
-            : s.done
+            : trulyDone
             ? "✓ 鸟种明细补抓完成"
+            : endedShort
+            ? "◑ 鸟种明细补抓暂停"
             : "⟳ 鸟种明细补抓中"}
         </b>
         <span className="snum">
@@ -111,8 +118,10 @@ export default function ScrapeStatus() {
               🔊 红角鸮
             </button>
           </>
-        ) : s.done ? (
+        ) : trulyDone ? (
           "明细已抓全。导入并重新导出后，频率会更准、白马雪山等空清单会补上。"
+        ) : endedShort ? (
+          `到 3 小时上限停了，还差 ${remaining} 份没抓到（反复撞验证码或没轮到）。不是出错——重跑 fetch_trip.py 可续抓，已抓的会跳过。`
         ) : (
           `本轮 ${s.session_fetched}/${s.session_todo} · 自动跳过验证码 ${s.captcha_events} 次（无需手动解）· ${s.updated_at} 更新`
         )}

@@ -104,6 +104,13 @@ body {
   border-color: var(--present);
   background: #eef5ef;
 }
+.scrape.paused {
+  border-color: var(--hi-line);
+  background: #fff7e0;
+}
+.scrape.paused .sbar i {
+  background: var(--hi-line);
+}
 .scrape .srow {
   display: flex;
   align-items: baseline;
