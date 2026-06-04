@@ -6,6 +6,9 @@ import { useEffect, useRef, useState } from "react";
 export default function ScrapeStatus({
   src = "/data/scrape_status.json",
   noun = "鸟种明细",
+  // 坐标接口(/front/activity/get)撞死后得人工过一次验证码才放行（实测换会话绕不过，
+  // 与鸟种明细接口不同）。开 manualCaptcha 时，卡住文案改成「请去手动解」。
+  manualCaptcha = false,
 }) {
   const [s, setS] = useState(null);
   const [showAlert, setShowAlert] = useState(false);
@@ -80,8 +83,17 @@ export default function ScrapeStatus({
               <div className="owl-ico">🦉</div>
               <p>
                 后台抓{noun}连续撞验证码、暂时没新进展（{s.have_total}/{s.target_total}）。
-                验证码是<b>自动换会话重试</b>的，<b>不需要你手动解</b>；若长时间卡住多半是网络被限，
-                换个网络或稍后再试即可。它会自己继续，你也可以先做别的。
+                {manualCaptcha ? (
+                  <>
+                    这个接口换会话绕不过，需要你去 <b>birdreport.cn</b> 手动过一次验证码
+                    （随便点开一份报告、看到图就输一下），抓取会<b>自己恢复继续</b>，不用重跑。
+                  </>
+                ) : (
+                  <>
+                    验证码是<b>自动换会话重试</b>的，<b>不需要你手动解</b>；若长时间卡住多半是网络被限，
+                    换个网络或稍后再试即可。它会自己继续，你也可以先做别的。
+                  </>
+                )}
               </p>
             </div>
             <div className="owl-act">
@@ -112,8 +124,10 @@ export default function ScrapeStatus({
       <div className="snote">
         {s.stalled ? (
           <>
-            连续撞验证码或约 {Math.round(s.idle_seconds / 60)} 分钟无进展。验证码是自动换会话重试的、不需要你手动解；
-            若长时间卡住多半是网络被限，可换网络或稍后重试。
+            连续撞验证码或约 {Math.round(s.idle_seconds / 60)} 分钟无进展。
+            {manualCaptcha
+              ? "请去 birdreport.cn 手动过一次验证码，抓取会自己恢复继续（不用重跑）。"
+              : "验证码是自动换会话重试的、不需要你手动解；若长时间卡住多半是网络被限，可换网络或稍后重试。"}
             <button type="button" className="hoot" onClick={hoot} title="红角鸮叫一声">
               🔊 红角鸮
             </button>
