@@ -77,7 +77,8 @@ export default function App() {
         </div>
       </div>
 
-      <ScrapeStatus />
+      <ScrapeStatus src="/data/scrape_status.json" noun="鸟种明细" />
+      <ScrapeStatus src="/data/coords_status.json" noun="坐标" />
 
       <div className="tabs">
         {TABS.map((t) => (
