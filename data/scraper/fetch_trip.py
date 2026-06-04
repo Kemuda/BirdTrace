@@ -25,7 +25,7 @@ from pathlib import Path
 
 from birdreport_client import BirdReportClient, BirdReportError
 
-BASE = Path("/Users/amberdrolma/Documents/Claude_Code/BirdTrace/data")
+BASE = Path(__file__).resolve().parents[1]   # data/scraper/ -> data/
 DB_PATH = BASE / "db" / "birdreport.sqlite"
 CHK_DIR = BASE / "raw" / "checklists"
 OBS_DIR = BASE / "raw" / "observations"
