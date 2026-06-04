@@ -106,32 +106,51 @@ def export_bar_chart(province: str, taxon: str) -> Path:
     return dst
 
 
+def _filters(prefix: str, districts: tuple[str, ...], city: str | None,
+             points: tuple[str, ...]) -> str:
+    """Build the location WHERE fragment for a given column prefix ("" or "c.").
+
+    Composable grain: districts (区县集) and/or city (市/地区) and/or points
+    (point_name 模糊匹配，折叠各种写法). point_name 字段写法很乱，所以景点用
+    LIKE %关键词% 归并。Params are shared across both query shapes (no prefix on
+    the bind names), so only the column prefix differs between the two SQLs.
+    """
+    parts = []
+    if districts:
+        ph = ",".join(f":d{i}" for i in range(len(districts)))
+        parts.append(f" AND {prefix}district IN ({ph})")
+    elif city:
+        parts.append(f" AND {prefix}city = :city")
+    if points:
+        ors = " OR ".join(f"{prefix}point_name LIKE :p{i}" for i in range(len(points)))
+        parts.append(f" AND ({ors})")
+    return "".join(parts)
+
+
 def _bundle(conn: sqlite3.Connection, province: str,
-            districts: tuple[str, ...] = (), city: str | None = None) -> dict:
+            districts: tuple[str, ...] = (), city: str | None = None,
+            points: tuple[str, ...] = ()) -> dict:
     """Month-by-month report count per species for a location.
 
-    Filter grain (most to least specific): `districts` (a set of 区县) >
-    `city` (a whole 市/地区) > province only (the legacy province bundle).
-    Same LEFT-JOIN frequency口径 as the Bar Chart: `total_reports[m]` is the
-    sampling effort (denominator), `species[i].monthly[m]` the numerator, so a
-    month with checklists but no detail still reports `0 / total` honestly.
-    The frontend computes `frequency_pct = monthly[m] / total_reports[m] * 100`.
+    Grain (composable): `points` (景点，point_name 模糊匹配) within `districts`
+    (区县集) or `city` (市/地区), within `province`. Empty -> whole province
+    (legacy bundle). Same LEFT-JOIN frequency口径 as the Bar Chart:
+    `total_reports[m]` is sampling effort (denominator), `species[i].monthly[m]`
+    the numerator, so a month with checklists but no detail still reports
+    `0 / total` honestly. Frontend computes `monthly[m] / total_reports[m] * 100`.
     """
     months = [f"{m:02d}" for m in range(1, 13)]
     params: dict = {"province": province}
-    where = ""
-    if districts:
-        placeholders = ",".join(f":d{i}" for i in range(len(districts)))
-        where = f" AND district IN ({placeholders})"
-        params.update({f"d{i}": d for i, d in enumerate(districts)})
-    elif city:
-        where = " AND city = :city"
+    params.update({f"d{i}": d for i, d in enumerate(districts)})
+    if city and not districts:
         params["city"] = city
+    params.update({f"p{i}": f"%{p}%" for i, p in enumerate(points)})
 
     totals_by_month = {
         m: cnt for m, cnt in conn.execute(
             "SELECT strftime('%m', start_time) AS m, COUNT(*) AS cnt "
-            "FROM checklists WHERE province = :province" + where + " GROUP BY m",
+            "FROM checklists WHERE province = :province"
+            + _filters("", districts, city, points) + " GROUP BY m",
             params,
         )
     }
@@ -141,7 +160,7 @@ def _bundle(conn: sqlite3.Connection, province: str,
         "COUNT(DISTINCT c.report_id) AS cnt "
         "FROM checklists c JOIN observations o ON c.report_id = o.report_id "
         "WHERE c.province = :province AND o.taxon_name IS NOT NULL"
-        + where.replace(" AND district", " AND c.district").replace(" AND city", " AND c.city")
+        + _filters("c.", districts, city, points)
         + " GROUP BY o.taxon_name, m",
         params,
     ):
@@ -186,30 +205,66 @@ def export_province_bundle(province: str) -> Path:
 TRIP_MONTH = "06"
 THIN_SAMPLE = 15  # N < THIN_SAMPLE -> flag as 样本薄 (PRD 数据诚实性)
 
-# Each stop filters by `districts` (区县 set) when we can resolve that grain,
-# else by `city` (市/地区). 西藏 grain chosen from real coverage (2026-06-04 load):
-# 拉萨/日喀则 broad route -> city-level; 阿里 转山/扎达 -> the single 区县.
+# 地点粒度（Amber 2026-06-04 定）：**有具体景点的（云南）拆到景点**，用 `points`
+# 模糊匹配折叠 point_name 的各种写法；**没有具体景点的（西藏拉萨/日喀则）用市级**，
+# 阿里玛旁雍错/扎达本就是独立地点用区县级。点位字段很乱，所以 6 月真实数据常落在
+# 不出名的点上（玉龙 6 月物种其实在玉峰寺/玉水寨，不在玉龙雪山）—— 故招牌景点会
+# 诚实显示空/薄，同时给真正有数据的点也单列，免得数据消失。
 TRIP_STOPS = [
-    {"id": "lijiang-yulong", "label": "丽江 · 玉龙雪山/古城", "dates": "6/9–11",
-     "province": "云南", "city": "丽江市", "districts": ("古城区", "玉龙纳西族自治县")},
-    {"id": "shangri-la", "label": "香格里拉 · 独克宗/普达措", "dates": "6/11–12, 14",
-     "province": "云南", "city": "迪庆藏族自治州", "districts": ("香格里拉市",)},
-    {"id": "deqin-meili", "label": "德钦 · 梅里/雾浓顶", "dates": "6/12–13",
-     "province": "云南", "city": "迪庆藏族自治州", "districts": ("德钦县",)},
-    {"id": "lhasa", "label": "拉萨 · 拉萨河谷", "dates": "6/14–15",
-     "province": "西藏", "city": "拉萨市", "districts": ()},
-    {"id": "shigatse", "label": "日喀则 · 江孜/萨嘎/仲巴", "dates": "6/15–16",
-     "province": "西藏", "city": "日喀则市", "districts": ()},
-    {"id": "manasarovar", "label": "玛旁雍错/冈仁波齐转山", "dates": "6/17–19",
-     "province": "西藏", "city": "阿里地区", "districts": ("普兰县",)},
+    # —— 云南 · 丽江段（6/9–11）——
+    {"id": "yulong-snow", "label": "玉龙雪山 · 云杉坪", "dates": "6/9–10",
+     "province": "云南", "districts": ("玉龙纳西族自治县",), "points": ("玉龙雪山", "云杉坪")},
+    {"id": "blue-moon", "label": "蓝月谷", "dates": "6/9–10",
+     "province": "云南", "districts": ("玉龙纳西族自治县",), "points": ("蓝月谷",)},
+    {"id": "yufeng", "label": "玉峰寺 · 玉水寨 · 白沙", "dates": "6/10",
+     "province": "云南", "districts": ("玉龙纳西族自治县",), "points": ("玉峰寺", "玉水寨", "白沙")},
+    {"id": "shuhe", "label": "束河古镇", "dates": "6/10",
+     "province": "云南", "points": ("束河",)},
+    {"id": "lijiang-old", "label": "丽江古城 · 黑龙潭", "dates": "6/9",
+     "province": "云南", "districts": ("古城区",),
+     "points": ("古城", "黑龙潭", "狮子山", "四方街", "木府", "九鼎", "博物")},
+    {"id": "tiger-leap", "label": "虎跳峡", "dates": "6/11",
+     "province": "云南", "points": ("虎跳峡",)},
+    # —— 云南 · 迪庆/香格里拉段（6/11–12, 14）——
+    {"id": "dukezong", "label": "独克宗古城", "dates": "6/11",
+     "province": "云南", "districts": ("香格里拉市",), "points": ("独克宗", "月光", "龟山")},
+    {"id": "songzanlin", "label": "松赞林寺", "dates": "6/12",
+     "province": "云南", "districts": ("香格里拉市",), "points": ("松赞林", "噶丹")},
+    {"id": "pudacuo", "label": "普达措国家公园", "dates": "6/11–12",
+     "province": "云南", "districts": ("香格里拉市",), "points": ("普达措", "属都", "碧塔海")},
+    {"id": "napahai", "label": "纳帕海", "dates": "6/11–12",
+     "province": "云南", "districts": ("香格里拉市",), "points": ("纳帕海", "依拉")},
+    # —— 云南 · 德钦段（6/12–13）——
+    {"id": "meili", "label": "飞来寺 · 梅里 · 雾浓顶", "dates": "6/12–13",
+     "province": "云南", "districts": ("德钦县",), "points": ("飞来寺", "梅里", "雾浓顶")},
+    {"id": "baima", "label": "白马雪山", "dates": "6/12–13",
+     "province": "云南", "districts": ("德钦县",), "points": ("白马雪山",)},
+    # —— 西藏（无具体景点用市级；阿里独立地点用区县级）——
+    {"id": "lhasa", "label": "拉萨（市级）", "dates": "6/14–15",
+     "province": "西藏", "city": "拉萨市"},
+    {"id": "shigatse", "label": "日喀则（市级）", "dates": "6/15–16",
+     "province": "西藏", "city": "日喀则市"},
+    {"id": "manasarovar", "label": "玛旁雍错 · 普兰", "dates": "6/17–19",
+     "province": "西藏", "districts": ("普兰县",)},
     {"id": "zanda", "label": "扎达土林 · 古格", "dates": "6/20–21",
-     "province": "西藏", "city": "阿里地区", "districts": ("札达县",)},
+     "province": "西藏", "districts": ("札达县",)},
 ]
+
+
+def _stop_grain(stop: dict) -> str:
+    if stop.get("points"):
+        return "point"
+    if stop.get("districts"):
+        return "district"
+    if stop.get("city"):
+        return "city"
+    return "province"
 
 
 def trip_stop_bundle(conn: sqlite3.Connection, stop: dict) -> dict:
     """Build one stop's bundle + honesty metadata for the trip month."""
-    bundle = _bundle(conn, stop["province"], stop["districts"], stop.get("city"))
+    bundle = _bundle(conn, stop["province"], stop.get("districts", ()),
+                     stop.get("city"), stop.get("points", ()))
     mi = int(TRIP_MONTH) - 1
     total = bundle["total_reports"][mi]
     # Species reported in the trip month, ranked by report count desc.
@@ -227,8 +282,9 @@ def trip_stop_bundle(conn: sqlite3.Connection, stop: dict) -> dict:
     return {
         **{k: stop[k] for k in ("id", "label", "dates", "province")},
         "city": stop.get("city"),
-        "districts": list(stop["districts"]),
-        "grain": "district" if stop["districts"] else ("city" if stop.get("city") else "province"),
+        "districts": list(stop.get("districts", ())),
+        "points": list(stop.get("points", ())),
+        "grain": _stop_grain(stop),
         "trip_month": TRIP_MONTH,
         "total_reports_month": total,
         "species_count_month": len(month_species),
@@ -254,7 +310,7 @@ def export_trip() -> list[Path]:
             manifest.append({
                 "id": b["id"], "label": b["label"], "dates": b["dates"],
                 "province": b["province"], "city": b["city"],
-                "districts": b["districts"], "grain": b["grain"],
+                "districts": b["districts"], "points": b["points"], "grain": b["grain"],
                 "total_reports_month": b["total_reports_month"],
                 "species_count_month": b["species_count_month"],
                 "data_status": b["data_status"],
