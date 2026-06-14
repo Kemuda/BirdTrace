@@ -1,0 +1,8 @@
+# Controls what the `vercel` CLI uploads. Its presence makes Vercel STOP
+# falling back to the repo .gitignore — which is what we want, because the
+# app's data lives in public/data/ and that folder IS gitignored (to keep the
+# scraped bird data off GitHub). Here we upload it but skip build artifacts.
+node_modules
+dist
+.vite
+.DS_Store
