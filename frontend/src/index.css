@@ -1804,6 +1804,16 @@ body {
 .locchip--point {
   color: var(--ink);
 }
+.locchip--stat {
+  font-family: "JetBrains Mono", monospace;
+  color: var(--ink);
+  background: #fff;
+  border-color: var(--line);
+}
+.locchip--merged {
+  cursor: help;
+  border-style: dashed;
+}
 
 /* 面包屑上的"合并 N 处"小徽章 */
 .crumb-badge {
@@ -1816,6 +1826,47 @@ body {
   padding: 1px 6px;
   margin-left: 6px;
   white-space: nowrap;
+}
+
+/* 鸟点排行里的区县 + 合并 tag（跟 tag1 同尺寸家族）*/
+.tag-district {
+  font-family: inherit;
+  font-size: 10px;
+  color: var(--hand);
+  border: 1.5px solid var(--line-soft);
+  border-radius: 5px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.tag-merged {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--ink-soft);
+  border: 1.5px dashed var(--line-soft);
+  border-radius: 5px;
+  padding: 1px 6px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* 鸟点排行行 hover / 选中 */
+.sprow.on {
+  background: var(--hi);
+  border-left: 3px solid var(--hi-line);
+  padding-left: 5px;
+}
+
+/* leaflet popup 里的区县行 */
+.leaflet-popup-content .pd {
+  font-size: 11px;
+  color: var(--hand);
+  margin: 2px 0;
+}
+.leaflet-popup-content .pm-merge {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--hand);
+  margin-top: 2px;
 }
 
 /* 占位地图页轻量版 */

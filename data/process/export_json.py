@@ -664,6 +664,12 @@ def region_bundle(conn: sqlite3.Connection, city_meta: dict) -> tuple[dict, list
             "GROUP BY point_name ORDER BY COUNT(*) DESC LIMIT 1", (pid,)
         ).fetchone()
         name = name[0] if name else pid
+        # 代表区县 = 出现最多的 district 写法（同 pointId 可能跨区县；给前端 chip 用）
+        district_row = conn.execute(
+            "SELECT district FROM checklists WHERE point_id = ? AND district IS NOT NULL "
+            "GROUP BY district ORDER BY COUNT(*) DESC LIMIT 1", (pid,)
+        ).fetchone()
+        district = district_row[0] if district_row else None
         rows = conn.execute(
             "SELECT o.taxon_name, COUNT(DISTINCT c.report_id) AS r "
             "FROM checklists c JOIN observations o ON o.report_id = c.report_id "
@@ -673,7 +679,7 @@ def region_bundle(conn: sqlite3.Connection, city_meta: dict) -> tuple[dict, list
         nsp = len(rows)
         top = [r[0] for r in rows[:6]]
         spots.append({
-            "id": pid, "name": name,
+            "id": pid, "name": name, "district": district,
             "lat": round(lat, 5) if lat is not None else None,
             "lng": round(lng, 5) if lng is not None else None,
             "nck": nck, "nsp": nsp,

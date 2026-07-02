@@ -7,9 +7,9 @@ import Info from "../components/Info.jsx";
 import { IS_PUBLIC } from "../lib/mode.js";
 import { groupSpotsByCanonical } from "../lib/spots.js";
 
-// 地区概览（面→点收敛中间页）。选中"整个市（地区概览）"时：
-// 地图 + 鸟点排行帮用户从面收敛到一个具体鸟点，再点进该点的鸟种名录（叶子页）。
-// 排行口径 = 全部记录（对齐 eBird Hotspot）；行程月的过滤留在叶子页里。
+// 地区概览（面→点收敛中间页）。picker 或用户点击地图/排行选中一个鸟点后 → 叶子页。
+// 关键调整（Amber）：**地图永远保留**，叶子页只替换下方的排行块为鸟种名录。
+// 排行 / map / 叶子页都用规范化合并后的 spots（拉市海 3 个 raw id 合为 1 点）。
 
 const SORTS = [
   { k: "nsp", lab: "鸟种数", unit: "种" },
@@ -27,10 +27,12 @@ function seasonNote(months) {
     : `样本以 ${peak[0]} 月为主`;
 }
 
-// ===== 地图（Leaflet）=====
-function RegionMap({ spots, onPick }) {
+// ===== 地图 =====
+function RegionMap({ spots, onPick, highlightedId }) {
   const elRef = useRef(null);
   const mapRef = useRef(null);
+  const highlightLayerRef = useRef(null);
+  const homeBoundsRef = useRef(null);
 
   useEffect(() => {
     const pts = spots.filter((s) => s.lat != null && s.lng != null);
@@ -56,9 +58,15 @@ function RegionMap({ spots, onPick }) {
         fillOpacity: 0.55,
       }).addTo(map);
       const birds = (s.top || []).slice(0, 5).join("、");
+      const districtLine = s.district ? `<div class="pd">${s.district}</div>` : "";
+      const mergedLine = s.raw && s.raw.length > 1
+        ? `<div class="pm-merge">合并 ${s.raw.length} 处同名点</div>`
+        : "";
       m.bindPopup(
-        `<div class="pn">${s.name}${weak ? ' <span style="color:#b06a4a">(仅1清单)</span>' : ""}</div>` +
+        `<div class="pn">${s.name}</div>` +
+          districtLine +
           `<div class="pm">鸟种 ${s.nsp} · 清单 ${s.nck} · 种/单 ${s.spc}</div>` +
+          mergedLine +
           `<div class="pb">常见：${birds}</div>` +
           `<div class="pgo">看该点名录 →</div>`
       );
@@ -69,9 +77,9 @@ function RegionMap({ spots, onPick }) {
     });
 
     const homeBounds = L.latLngBounds(pts.map((s) => [s.lat, s.lng])).pad(0.12);
+    homeBoundsRef.current = homeBounds;
     map.fitBounds(homeBounds);
 
-    // Shift 框选放大（仅桌面端有键盘 → 移动端会自动隐藏，CSS 里控制）
     const BoxCtl = L.Control.extend({
       options: { position: "topright" },
       onAdd() {
@@ -98,14 +106,42 @@ function RegionMap({ spots, onPick }) {
       window.removeEventListener("keyup", disarm);
       map.remove();
       mapRef.current = null;
+      highlightLayerRef.current = null;
+      homeBoundsRef.current = null;
     };
   }, [spots, onPick]);
+
+  // 高亮圈：选中的鸟点画个环 + 视图平移过去；换点或取消时清掉。
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (highlightLayerRef.current) {
+      map.removeLayer(highlightLayerRef.current);
+      highlightLayerRef.current = null;
+    }
+    if (!highlightedId) {
+      // 回到全境视图
+      if (homeBoundsRef.current) map.fitBounds(homeBoundsRef.current);
+      return;
+    }
+    const s = spots.find((x) => x.id === highlightedId || (x.raw || []).some((r) => r.id === highlightedId));
+    if (!s || s.lat == null) return;
+    const ring = L.circleMarker([s.lat, s.lng], {
+      radius: 22,
+      weight: 3,
+      color: "#3b5c8a",
+      fillOpacity: 0,
+      interactive: false,
+    }).addTo(map);
+    highlightLayerRef.current = ring;
+    map.setView([s.lat, s.lng], Math.max(map.getZoom(), 12), { animate: true });
+  }, [highlightedId, spots]);
 
   return <div id="map" ref={elRef} />;
 }
 
 // ===== 鸟点排行表 =====
-function SpotRanking({ spots, onPick }) {
+function SpotRanking({ spots, onPick, highlightedId }) {
   const [sortK, setSortK] = useState("nsp");
   const [expanded, setExpanded] = useState(false);
 
@@ -159,10 +195,11 @@ function SpotRanking({ spots, onPick }) {
           const unit = SORTS.find((x) => x.k === sortK).unit;
           const second = sortK === "nck" ? `${s.nsp} 种` : `${s.nck} 份`;
           const isTop = i === 0 && sortK === "nsp";
+          const on = highlightedId && (s.id === highlightedId || (s.raw || []).some((r) => r.id === highlightedId));
           return (
             <div
               key={s.id}
-              className={"sprow" + (weak ? " weak" : "") + (i === 0 ? " top1" : "")}
+              className={"sprow" + (weak ? " weak" : "") + (i === 0 ? " top1" : "") + (on ? " on" : "")}
               onClick={() => onPick(s)}
             >
               <span className="rank">{i + 1}</span>
@@ -170,7 +207,16 @@ function SpotRanking({ spots, onPick }) {
                 <span className="nm">
                   <span className="cn">{s.name}</span>
                   {isTop && <span className="star-badge">★ 最优</span>}
+                  {s.district && <span className="tag-district">{s.district}</span>}
                   {weak && <span className="tag1">样本仅1</span>}
+                  {s.raw && s.raw.length > 1 && (
+                    <span
+                      className="tag-merged"
+                      title={s.raw.map((r) => r.name).join(" / ")}
+                    >
+                      合并 {s.raw.length}
+                    </span>
+                  )}
                 </span>
                 <span className="birds">
                   <b>常见</b> {(s.top || []).slice(0, 4).join("、")}
@@ -200,8 +246,8 @@ function SpotRanking({ spots, onPick }) {
   );
 }
 
-// 合并多个 point bundle：拿几份 /data/regions/points/<id>.json 出来聚成一份。
-// 用于规范化后的合并组（拉市海 = 3 个 raw id 的合并）。单点也走这条，语义一致。
+// 合并多个 point bundle：拉多份 /data/regions/points/<id>.json 聚成一份。
+// 单个 id 也走这条，语义一致。
 async function loadMergedPoint(pointIds) {
   const bundles = await Promise.all(
     pointIds.map(async (id) => {
@@ -217,9 +263,7 @@ async function loadMergedPoint(pointIds) {
   if (!ok.length) return null;
   if (ok.length === 1) return ok[0];
 
-  // 多份 → 合并
   const total_reports = ok.reduce((s, b) => s + (b.total_reports || 0), 0);
-  // 物种：按中文名合并 reports；频率 = reports_merged / total_reports_merged
   const bySpecies = new Map();
   for (const b of ok) {
     for (const sp of b.species || []) {
@@ -229,7 +273,6 @@ async function loadMergedPoint(pointIds) {
         bySpecies.set(sp.name, e);
       }
       e.reports += sp.reports || 0;
-      // 保留任意一份 links / english_name / latin_name（都相同）
     }
   }
   const species = Array.from(bySpecies.values()).map((sp) => ({
@@ -268,14 +311,13 @@ async function loadMergedPoint(pointIds) {
   };
 }
 
-// ===== 鸟点叶子页名录 =====
-function PointChecklist({ pointIds, displayName, region, picker, marks, toggle, setNote, onWhere, onShowTargets, markCount, onBack }) {
+// ===== 鸟点叶子页名录（不含 picker/crumb/map —— 那些留给父容器共享）=====
+function PointChecklistInline({ pointIds, displayName, marks, toggle, setNote, onWhere, onShowTargets, markCount }) {
   const [pb, setPb] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showReports, setShowReports] = useState(false);
-
-  // pointIds 相同就不重拉（stringify 稳定）
   const key = pointIds.join("|");
+
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -296,27 +338,14 @@ function PointChecklist({ pointIds, displayName, region, picker, marks, toggle, 
   const reports = pb?.reports || [];
   const pending = reports.filter((r) => !r.has_detail).length;
   const note = seasonNote(pb?.months);
-  const merged = pb?._mergedFrom > 1 ? pb._mergedFrom : 0;
 
   return (
     <>
-      {picker}
-
-      <div className="rg-crumb">
-        <a onClick={onBack}>↩ {region}</a> ›{" "}
-        <span className="cur">{displayName || pb?.name || pointIds[0]}</span>
-        {merged > 0 && (
-          <span className="crumb-badge" title="来自多个同名 pointId 的记录已合并">
-            合并 {merged} 处
-          </span>
-        )}
-      </div>
-
       {!loading && species.length > 0 && (
         <div className="concl">
           <span className="k">速读</span>
           <span className="v">
-            该点共 {species.length} 种
+            {displayName || pb?.name} · 共 {species.length} 种
             <small> · 最常见「{species[0].name}」{species[0].frequency_pct}%</small>
           </span>
         </div>
@@ -372,15 +401,6 @@ function PointChecklist({ pointIds, displayName, region, picker, marks, toggle, 
         />
       )}
 
-      <div className="take">
-        <div className="legend">
-          <span>
-            <span className="rdot" title="局部稀有（在这里不容易撞到）" />
-            稀有
-          </span>
-        </div>
-      </div>
-
       {showReports && (
         <ReportList
           label={displayName || pb?.name || pointIds[0]}
@@ -393,12 +413,11 @@ function PointChecklist({ pointIds, displayName, region, picker, marks, toggle, 
   );
 }
 
-// ===== 容器：概览 ↔ 鸟点名录 =====
+// ===== 容器：概览 + 叶子页共用 picker/crumb/map，只切换下方内容 =====
 export default function PageRegion({ regionId, pickedPointId, onBackToRegion, picker, marks, toggle, setNote, onWhere, onShowTargets, markCount }) {
   const [bundle, setBundle] = useState(null);
   const [loading, setLoading] = useState(true);
-  // pickedPointId 由父组件（picker 从"鸟点排行"里选中）传入 → 直接进叶子页；
-  // picked 是本页内点地图/排行 drill 进去的临时选择。
+  // 用户从地图/排行 click drill 进的点。父组件通过 pickedPointId 传的走 externalPick。
   const [picked, setPicked] = useState(null);
 
   useEffect(() => {
@@ -421,69 +440,66 @@ export default function PageRegion({ regionId, pickedPointId, onBackToRegion, pi
     };
   }, [regionId]);
 
+  const spots = useMemo(() => groupSpotsByCanonical(bundle?.spots || []), [bundle]);
+
   if (loading) return <div className="empty">加载中…</div>;
   if (!bundle) return <div className="empty">该地区暂无概览数据</div>;
 
-  const { region, city, overview, spots: rawSpots } = bundle;
-  // 规范化合并同类项：拉市海湿地公园 + 拉市海候鸟湾 + 拉市海 → 拉市海（1 圈）
-  // 老君山自然中心 + 老君山国家级名胜风景区 → 老君山。map/排行都用这版。
-  const spots = groupSpotsByCanonical(rawSpots);
+  const { region, city, overview } = bundle;
   const cityShort = (city || "").replace(/(市|地区|自治州)$/, "");
   const best = spots[0];
-  const bestQual = best
-    ? best.nck <= 1
-      ? "样本仅 1 份"
-      : "丰富又靠谱"
-    : "";
+  const bestQual = best ? (best.nck <= 1 ? "样本仅 1 份" : "丰富又靠谱") : "";
   const withCoords = spots.filter((s) => s.lat != null).length;
 
-  // 父组件预选中的鸟点：先在合并后的 spots 里找，找不到再回退到 rawSpots，
-  // 都找不到就用 pickedPointId 自己（PointChecklist 会自己按 id 拉 bundle）。
   const externalPick = pickedPointId
     ? spots.find((s) => s.id === pickedPointId || s.raw.some((r) => r.id === pickedPointId)) ||
       { id: pickedPointId, name: pickedPointId, raw: [{ id: pickedPointId }] }
     : null;
   const activePick = picked || externalPick;
 
-  if (activePick) {
-    // picked 来自地图/排行 click，其 raw 已合并；externalPick 也带 raw
-    const pointIds = (activePick.raw || [{ id: activePick.id }]).map((r) => r.id);
-    return (
-      <div className="wf">
-        <PointChecklist
-          pointIds={pointIds}
-          displayName={activePick.name}
-          region={`${region}`}
-          picker={picker}
-          marks={marks}
-          toggle={toggle}
-          setNote={setNote}
-          onWhere={onWhere}
-          onShowTargets={onShowTargets}
-          markCount={markCount}
-          onBack={externalPick && !picked && onBackToRegion ? onBackToRegion : () => setPicked(null)}
-        />
-      </div>
-    );
-  }
+  const backToOverview = () => {
+    if (externalPick && !picked && onBackToRegion) onBackToRegion();
+    else setPicked(null);
+  };
+
+  const displayName = activePick?.name;
+  const merged = activePick?.raw?.length > 1 ? activePick.raw.length : 0;
+  const pointIds = activePick
+    ? (activePick.raw || [{ id: activePick.id }]).map((r) => r.id)
+    : [];
 
   return (
     <div className="wf">
       {picker}
 
+      {/* 面包屑 —— 概览时 = 地区名；叶子页时 = 返回链 + 当前鸟点 */}
       <div className="rg-crumb">
-        <span className="cur">{region}</span>
-        <Info label="怎么读地区概览">
-          <p>
-            地区级 → 先在地图/排行选一个鸟点，再看该点的鸟种名录。
-          </p>
-          <p>
-            覆盖 <b>{overview.checklists}</b> 份清单 / <b>{overview.obs}</b> 条记录。
-          </p>
-        </Info>
+        {activePick ? (
+          <>
+            <a onClick={backToOverview}>↩ {region}</a> ›{" "}
+            <span className="cur">{displayName}</span>
+            {activePick.district && <span className="tag-district">{activePick.district}</span>}
+            {merged > 0 && (
+              <span className="crumb-badge" title="来自多个同名 pointId 的记录已合并">
+                合并 {merged} 处
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            <span className="cur">{region}</span>
+            <Info label="怎么读地区概览">
+              <p>地区级 → 先在地图/排行选一个鸟点，再看该点的鸟种名录。</p>
+              <p>
+                覆盖 <b>{overview.checklists}</b> 份清单 / <b>{overview.obs}</b> 条记录。
+              </p>
+            </Info>
+          </>
+        )}
       </div>
 
-      {best && (
+      {/* 速读结论 —— 概览时 = 最优鸟点；叶子页时看 PointChecklistInline 里 */}
+      {!activePick && best && (
         <div className="concl">
           <span className="k">速读</span>
           <span className="v">
@@ -493,9 +509,14 @@ export default function PageRegion({ regionId, pickedPointId, onBackToRegion, pi
         </div>
       )}
 
+      {/* 地图 —— 概览/叶子页都保留，叶子页时把选中点画环高亮 */}
       {withCoords > 0 ? (
         <>
-          <RegionMap spots={spots} onPick={setPicked} />
+          <RegionMap
+            spots={spots}
+            onPick={setPicked}
+            highlightedId={activePick?.id}
+          />
           <div className="map-cap">
             <span>
               <span className="swatch" style={{ background: "#d9a92e" }} /> 最值得去
@@ -516,7 +537,21 @@ export default function PageRegion({ regionId, pickedPointId, onBackToRegion, pi
         )
       )}
 
-      <SpotRanking spots={spots} onPick={setPicked} />
+      {/* 下方内容 —— 概览时是排行；叶子页时换鸟种名录 */}
+      {activePick ? (
+        <PointChecklistInline
+          pointIds={pointIds}
+          displayName={displayName}
+          marks={marks}
+          toggle={toggle}
+          setNote={setNote}
+          onWhere={onWhere}
+          onShowTargets={onShowTargets}
+          markCount={markCount}
+        />
+      ) : (
+        <SpotRanking spots={spots} onPick={setPicked} highlightedId={activePick?.id} />
+      )}
     </div>
   );
 }
