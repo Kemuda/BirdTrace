@@ -321,9 +321,11 @@ function PointChecklist({ pointId, region, picker, marks, toggle, setNote, onWhe
 }
 
 // ===== 容器：概览 ↔ 鸟点名录 =====
-export default function PageRegion({ regionId, picker, marks, toggle, setNote, onWhere, onShowTargets, markCount }) {
+export default function PageRegion({ regionId, pickedPointId, onBackToRegion, picker, marks, toggle, setNote, onWhere, onShowTargets, markCount }) {
   const [bundle, setBundle] = useState(null);
   const [loading, setLoading] = useState(true);
+  // pickedPointId 由父组件（picker 从"鸟点排行"里选中）传入 → 直接进叶子页；
+  // picked 是本页内点地图/排行 drill 进去的临时选择。
   const [picked, setPicked] = useState(null);
 
   useEffect(() => {
@@ -359,11 +361,18 @@ export default function PageRegion({ regionId, picker, marks, toggle, setNote, o
     : "";
   const withCoords = overview.with_coords ?? spots.filter((s) => s.lat != null).length;
 
-  if (picked) {
+  // 父组件预选中的鸟点：从 bundle.spots 里找它，用它的元数据渲染叶子页；
+  // 找不到也不阻断 —— PointChecklist 会自己按 pointId 拉 /data/regions/points/<id>.json。
+  const externalPick = pickedPointId
+    ? spots.find((s) => s.id === pickedPointId) || { id: pickedPointId, name: pickedPointId }
+    : null;
+  const activePick = picked || externalPick;
+
+  if (activePick) {
     return (
       <div className="wf">
         <PointChecklist
-          pointId={picked.id}
+          pointId={activePick.id}
           region={`${region}`}
           picker={picker}
           marks={marks}
@@ -372,7 +381,7 @@ export default function PageRegion({ regionId, picker, marks, toggle, setNote, o
           onWhere={onWhere}
           onShowTargets={onShowTargets}
           markCount={markCount}
-          onBack={() => setPicked(null)}
+          onBack={externalPick && !picked && onBackToRegion ? onBackToRegion : () => setPicked(null)}
         />
       </div>
     );

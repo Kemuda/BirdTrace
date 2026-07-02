@@ -91,16 +91,19 @@ export default function App() {
   }, [cities, stops, city]);
 
   // 城市换了：默认选该市的地区概览（有则用 regionId）或第一个鸟点。
+  // NB: deps 里*不*放 stopId —— 否则用户从鸟点排行里选了一个 scraped point_id
+  // （不属于 regionId 也不在 c.points 里），会立刻被这里 reset 回 regionId。
+  // 只在城市真的换了时重置，其它情况保留用户的选择。
   useEffect(() => {
     if (!city) return;
     const c = cities.find((x) => x.name === city);
     if (!c) return;
-    // stopId 已属于当前城市 → 保持；否则重置
-    const belongs =
-      c.regionId === stopId || c.points.some((p) => p.id === stopId);
-    if (belongs) return;
-    setStopId(c.regionId || c.points[0]?.id || "");
-  }, [city, cities, stopId]);
+    setStopId((cur) => {
+      const belongs = c.regionId === cur || c.points.some((p) => p.id === cur);
+      return belongs ? cur : (c.regionId || c.points[0]?.id || "");
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [city, cities]);
 
   const currentCity = cities.find((c) => c.name === city);
 

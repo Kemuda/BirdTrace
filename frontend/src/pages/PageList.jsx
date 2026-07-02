@@ -18,11 +18,17 @@ export default function PageList({ cities, city, onCity, currentCity, stopId, on
   const [whereSpecies, setWhereSpecies] = useState(null);
   const { marks, toggle, setNote, importMarks } = useMarks();
 
-  // 当前 stopId 是地区（非鸟点） → 走面→点收敛流程（地图 + 鸟点排行）。
+  // 三种 stopId：
+  //   1. currentCity.regionId 等 → 地区概览页（PageRegion 空 picked）
+  //   2. currentCity.points 里的行程停留点 id → 名录模式（下面这个 useEffect）
+  //   3. 其它（picker 从"鸟点排行" 里挑的 scraped point_id） → PageRegion 预
+  //      picked 到那个点，直接进叶子页
   const region = regions.find((r) => r.id === stopId);
+  const tripStop = (currentCity?.points || []).find((p) => p.id === stopId);
+  const spotOfRegion = !region && !tripStop && !!currentCity?.regionId;
 
   useEffect(() => {
-    if (!stopId || region) return; // 地区模式不用 trip bundle
+    if (!stopId || region || spotOfRegion || !tripStop) return; // 只有 trip 分支才拉 bundle
     let alive = true;
     setLoading(true);
     (async () => {
@@ -39,7 +45,7 @@ export default function PageList({ cities, city, onCity, currentCity, stopId, on
     return () => {
       alive = false;
     };
-  }, [stopId, region]);
+  }, [stopId, region, spotOfRegion, tripStop]);
 
   const markCount = Object.keys(marks).length;
   const targetCount = Object.values(marks).filter((m) => m.target).length;
@@ -72,12 +78,34 @@ export default function PageList({ cities, city, onCity, currentCity, stopId, on
     </>
   );
 
-  // ===== 地区概览模式 =====
+  // ===== 地区概览模式（picker 选了"整个市（地区概览）"）=====
   if (region) {
     return (
       <>
         <PageRegion
           regionId={stopId}
+          picker={picker}
+          marks={marks}
+          toggle={toggle}
+          setNote={setNote}
+          onWhere={setWhereSpecies}
+          onShowTargets={() => setShowTargets(true)}
+          markCount={markCount}
+        />
+        {sharedModals}
+      </>
+    );
+  }
+
+  // ===== 鸟点排行直跳（picker 选了 scraped 鸟点，不是行程停留点）=====
+  // 走 PageRegion 的叶子页，绕过 trip bundle。
+  if (spotOfRegion) {
+    return (
+      <>
+        <PageRegion
+          regionId={currentCity.regionId}
+          pickedPointId={stopId}
+          onBackToRegion={() => onStop(currentCity.regionId)}
           picker={picker}
           marks={marks}
           toggle={toggle}
