@@ -1777,6 +1777,34 @@ body {
   cursor: not-allowed;
 }
 
+/* 鸟点选中后的信息小标签（区县 / 具体子景点 / 地区概览标记）—— city 是聚合键，
+   这些是丰富信息，两维结构不打破。 */
+.locchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+.locchip {
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 20px;
+  border: 1px solid var(--line-soft);
+  background: var(--paper-2);
+  color: var(--ink-soft);
+  line-height: 1.55;
+  white-space: nowrap;
+}
+.locchip--region {
+  border-color: var(--hi-line);
+  background: var(--hi);
+  color: #5e4708;
+  font-weight: 600;
+}
+.locchip--point {
+  color: var(--ink);
+}
+
 /* 占位地图页轻量版 */
 .map-ph-in {
   text-align: center;

@@ -5,7 +5,7 @@ import PageMap from "./pages/PageMap.jsx";
 import ScrapeStatus from "./components/ScrapeStatus.jsx";
 import Info from "./components/Info.jsx";
 import { IS_PUBLIC } from "./lib/mode.js";
-import { groupByCity, cityOfStop } from "./lib/locations.js";
+import { groupByCity, cityOfStop, PUBLIC_CITIES } from "./lib/locations.js";
 
 const TABS = [
   { id: "list", name: "看什么", combo: "地+时→鸟" },
@@ -76,7 +76,10 @@ export default function App() {
     })();
   }, []);
 
-  const cities = useMemo(() => groupByCity(stops, regions), [stops, regions]);
+  const cities = useMemo(
+    () => groupByCity(stops, regions, IS_PUBLIC ? PUBLIC_CITIES : null),
+    [stops, regions]
+  );
 
   // Bootstrap：数据到手后自动挑一个"有物种明细"的默认组合，避免开屏空白。
   useEffect(() => {
