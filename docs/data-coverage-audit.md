@@ -3,8 +3,10 @@
 > 与 `docs/itinerary-june.md` 声明的 14 天行程停留点、`data/scraper/fetch_trip.py`
 > 配置、以及 `TODO.md` 记录的现状交叉比对，逐段列**已覆盖 / 有缺口 / 未抓**。
 >
-> 数据库文件不入库，无法从 DB 直接跑 SQL；本审计据代码 + docs 判断，实际份数以
-> 生产 DB 为准。
+> ⚠️ **数据库和 `frontend/public/data/` 都不入库**（前者 `.gitignore`，后者靠
+> `.vercelignore` 单独上传到 Vercel），本审计只能凭代码 + docs 推断；**实际份
+> 数与坐标覆盖以生产 DB / Vercel 部署为准**。据 Amber 反馈，Vercel 版里丽江
+> 已有坐标，说明 TODO 里"仅日喀则"是过时口径。
 
 ## 云南段（6/9–14）
 
@@ -36,13 +38,22 @@
 
 1. **邻月兜底**：虎跳峡（6 月为 0）、札达（6 月为 0）需并入 5–7 月才有样本。
    `TODO.md` 已列，v0.8 未实现。前端会显示"暂无该段报告"。
-2. **云南坐标未抓**：`fetch_report_detail.py` 只跑了日喀则；丽江 / 迪庆的鸟点
-   `lat/lng` 未入库。副作用：**丽江 / 香格里拉 / 德钦的地区概览页地图会走
-   "坐标抓取中" 分支**（v0.9 起 IS_PUBLIC=1 时该 callout 隐藏）。
-3. **日喀则坐标未 reload + 重导出**：坐标抓到了 DB，但 export_json 没重跑，
-   前端 `regions/日喀则.json` 里还没有点位经纬度。上线前必须跑：
+2. **云南坐标 — 丽江 ✅ 已抓**（Amber 确认 Vercel 版已在）；**迪庆（香格里拉 /
+   德钦）待用户在生产 DB 或 Vercel 上核对**。之前审计写"云南三市都没抓"是我看
+   TODO 时把"日喀则收尾"读成了"仅日喀则"，误判。
+   `region_bundle` 的 `with_coords` 是运行时统计（`spots.lat != null`），最终
+   是否显示地图完全看导出时 DB 里有没有该 city 的 `point_id` + `lat/lng`。
+3. **日喀则坐标是否已 reload + 重导出**：TODO 未打钩，但 Amber 反馈丽江在
+   Vercel 已可见 → 说明 `export_json.py` 至少跑过一轮把坐标带出去了。日喀则
+   的最新一批是否已并进 Vercel 版本，仍需实际核对；核对方法：
    ```
-   python data/process/load_checklists.py   # 已改 upsert，坐标不会被覆盖
+   # 生产端看 with_coords / 首份清单：
+   curl https://<vercel>.app/data/regions/manifest.json
+   curl https://<vercel>.app/data/regions/rizhaze-city.json | jq '.overview.with_coords'
+   ```
+   若为 0 或明显偏少，需要重跑：
+   ```
+   python data/process/load_checklists.py   # upsert 不覆盖已存坐标
    python data/process/export_json.py --trip
    ```
 4. **玛旁雍错 / 转山段样本极薄**：源站真的稀（1 份 checklist），非工程 bug。
@@ -61,6 +72,7 @@
   对外展示的主推样本。
 - **德钦 / 日喀则 / 普兰 / 札达** 四段做**诚实薄样本**展示（`data_status=thin`
   / `none`），点开会看到黄条提示、频率仅供参考。
-- **地图必须先补两件事再对外展示**：(a) 云南三市坐标抓取，(b) 日喀则坐标已抓
-  但需要 reload + 重导出。否则地区概览会出现空白地图或"坐标抓取中"提示（对外
-  版已隐藏该 callout，用户看不到解释，体验更差）。
+- **地图待核对**：丽江 ✅ 已确认；日喀则 / 香格里拉 / 德钦 建议逐个 curl 生产
+  端的 `regions/<id>.json` 看 `overview.with_coords`。任何一个 = 0 就补跑
+  `load_checklists.py` + `export_json.py --trip`。对外版 IS_PUBLIC=1 时该
+  "坐标抓取中" callout 已隐藏，用户看不到解释，所以最好上线前地图都能画出来。
