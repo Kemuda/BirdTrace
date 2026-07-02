@@ -1805,6 +1805,19 @@ body {
   color: var(--ink);
 }
 
+/* 面包屑上的"合并 N 处"小徽章 */
+.crumb-badge {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: #8a6a14;
+  background: var(--hi);
+  border: 1px solid var(--hi-line);
+  border-radius: 5px;
+  padding: 1px 6px;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
 /* 占位地图页轻量版 */
 .map-ph-in {
   text-align: center;

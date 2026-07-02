@@ -1,13 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { pointLabel, districtBadge } from "../lib/locations.js";
+import { groupSpotsByCanonical } from "../lib/spots.js";
+import { IS_PUBLIC } from "../lib/mode.js";
 
-// 地点两维选择器：城市（主） + 鸟点（次，可选）。
-// - 该市有地区概览 → 鸟点下拉多一项"整个市（地区概览）"
-// - 该市的 regions/<id>.json 里的 spots[]（真实抓到的鸟点）也异步塞进下拉，
-//   分组显示："行程停留点"（TRIP_STOPS 里的组合景点）与"鸟点排行"（scraped
-//   point_id，按鸟种数排）。这样拉萨这种没有细拆行程停留点的城市也能直接从
-//   下拉挑一个具体鸟点，不用先进地区概览再点。
-// - 选中鸟点后在下方显示区县 chip（如 玉龙县 / 古城区）+ 子景点前几个。
+// 城市 + 鸟点 两维选择器。
+// - 城市：地级市 / 自治州（对外版锁到丽江+拉萨；dev 版按数据全展开）
+// - 鸟点：分两块
+//   · 对外版（IS_PUBLIC）：只展示 canonical 化后的 scraped 鸟点，行程停留点不
+//     露出 —— 因为 demo 面向对方，不需要"我某天去这里"的框架。
+//   · dev 版：保留"行程停留点"optgroup + "鸟点排行"optgroup（后者也 canonical
+//     化，减少同名分散）。
+// - canonical 合并后同名点若源自多个 point_id，显示"+N" 徽章；选中时导航到该组
+//   清单最多的 primary id。
+// - 选中鸟点后在下方显示区县 + 子景点小 chip。
 
 const regionCache = new Map();
 async function loadRegionSpots(regionId) {
@@ -25,8 +30,6 @@ async function loadRegionSpots(regionId) {
       nsp: s.nsp || 0,
       nck: s.nck || 0,
     }));
-    // 按鸟种数降序：读者最有可能挑的排前面。
-    spots.sort((a, b) => b.nsp - a.nsp || b.nck - a.nck);
     regionCache.set(regionId, spots);
     return spots;
   } catch {
@@ -36,19 +39,21 @@ async function loadRegionSpots(regionId) {
 }
 
 export default function LocationPicker({ cities, city, onCity, currentCity, stopId, onStop }) {
-  const [regionSpots, setRegionSpots] = useState([]);
+  const [rawSpots, setRawSpots] = useState([]);
   const c = currentCity;
-  const pts = c?.points || [];
+  // 对外版隐藏行程停留点；dev 版仍显示。
+  const tripPoints = IS_PUBLIC ? [] : c?.points || [];
   const hasRegion = !!c?.regionId;
+  const spotGroups = useMemo(() => groupSpotsByCanonical(rawSpots), [rawSpots]);
 
   useEffect(() => {
     if (!hasRegion) {
-      setRegionSpots([]);
+      setRawSpots([]);
       return;
     }
     let alive = true;
     loadRegionSpots(c.regionId).then((spots) => {
-      if (alive) setRegionSpots(spots);
+      if (alive) setRawSpots(spots);
     });
     return () => {
       alive = false;
@@ -56,11 +61,13 @@ export default function LocationPicker({ cities, city, onCity, currentCity, stop
   }, [c?.regionId, hasRegion]);
 
   const isRegion = hasRegion && stopId === c?.regionId;
-  const selectedTripStop = pts.find((p) => p.id === stopId);
-  const selectedRegionSpot = regionSpots.find((s) => s.id === stopId);
+  const selectedTripStop = tripPoints.find((p) => p.id === stopId);
+  const selectedGroup = spotGroups.find(
+    (g) => g.id === stopId || g.raw.some((r) => r.id === stopId)
+  );
   const district = selectedTripStop ? districtBadge(selectedTripStop) : "";
   const childPoints = selectedTripStop?.points || [];
-  const anyPointOptions = pts.length > 0 || regionSpots.length > 0;
+  const anyPointOptions = tripPoints.length > 0 || spotGroups.length > 0;
 
   return (
     <div className="locpick">
@@ -84,33 +91,53 @@ export default function LocationPicker({ cities, city, onCity, currentCity, stop
           {hasRegion && (
             <option value={c.regionId}>整个{c.name}（地区概览）</option>
           )}
-          {pts.length > 0 && (
+          {tripPoints.length > 0 && (
             <optgroup label="行程停留点">
-              {pts.map((p) => (
+              {tripPoints.map((p) => (
                 <option key={p.id} value={p.id}>
                   {pointLabel(p)}
                 </option>
               ))}
             </optgroup>
           )}
-          {regionSpots.length > 0 && (
-            <optgroup label="鸟点排行">
-              {regionSpots.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}（{s.nsp} 种 / {s.nck} 份）
+          {spotGroups.length > 0 &&
+            (IS_PUBLIC ? (
+              // 对外版：不套 optgroup 标签，直接列鸟点
+              spotGroups.map((g) => (
+                <option key={g.name} value={g.id}>
+                  {g.name}
+                  {g.raw.length > 1 ? ` (+${g.raw.length - 1})` : ""} · {g.nsp} 种 / {g.nck} 份
                 </option>
-              ))}
-            </optgroup>
-          )}
+              ))
+            ) : (
+              <optgroup label="鸟点排行">
+                {spotGroups.map((g) => (
+                  <option key={g.name} value={g.id}>
+                    {g.name}
+                    {g.raw.length > 1 ? ` (+${g.raw.length - 1})` : ""} · {g.nsp} 种 / {g.nck} 份
+                  </option>
+                ))}
+              </optgroup>
+            ))}
           {!hasRegion && !anyPointOptions && <option value="">（暂无鸟点）</option>}
         </select>
-        {(isRegion || district || childPoints.length > 0 || selectedRegionSpot) && (
+        {(isRegion || district || childPoints.length > 0 || selectedGroup) && (
           <div className="locchips">
             {isRegion && <span className="locchip locchip--region">地区概览</span>}
-            {selectedRegionSpot && (
-              <span className="locchip locchip--region">
-                {selectedRegionSpot.nsp} 种 / {selectedRegionSpot.nck} 份
-              </span>
+            {selectedGroup && (
+              <>
+                <span className="locchip locchip--region">
+                  {selectedGroup.nsp}+ 种 / {selectedGroup.nck} 份
+                </span>
+                {selectedGroup.raw.length > 1 && (
+                  <span
+                    className="locchip"
+                    title={selectedGroup.raw.map((r) => r.name).join(" / ")}
+                  >
+                    合并 {selectedGroup.raw.length} 处同名点
+                  </span>
+                )}
+              </>
             )}
             {district && <span className="locchip">{district}</span>}
             {childPoints.slice(0, 3).map((p) => (

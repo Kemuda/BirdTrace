@@ -5,6 +5,7 @@ import SpeciesChecklist from "../components/SpeciesChecklist.jsx";
 import ReportList from "../components/ReportList.jsx";
 import Info from "../components/Info.jsx";
 import { IS_PUBLIC } from "../lib/mode.js";
+import { groupSpotsByCanonical } from "../lib/spots.js";
 
 // 地区概览（面→点收敛中间页）。选中"整个市（地区概览）"时：
 // 地图 + 鸟点排行帮用户从面收敛到一个具体鸟点，再点进该点的鸟种名录（叶子页）。
@@ -199,36 +200,103 @@ function SpotRanking({ spots, onPick }) {
   );
 }
 
+// 合并多个 point bundle：拿几份 /data/regions/points/<id>.json 出来聚成一份。
+// 用于规范化后的合并组（拉市海 = 3 个 raw id 的合并）。单点也走这条，语义一致。
+async function loadMergedPoint(pointIds) {
+  const bundles = await Promise.all(
+    pointIds.map(async (id) => {
+      try {
+        const r = await fetch(`/data/regions/points/${encodeURIComponent(id)}.json`);
+        return r.ok ? await r.json() : null;
+      } catch {
+        return null;
+      }
+    })
+  );
+  const ok = bundles.filter(Boolean);
+  if (!ok.length) return null;
+  if (ok.length === 1) return ok[0];
+
+  // 多份 → 合并
+  const total_reports = ok.reduce((s, b) => s + (b.total_reports || 0), 0);
+  // 物种：按中文名合并 reports；频率 = reports_merged / total_reports_merged
+  const bySpecies = new Map();
+  for (const b of ok) {
+    for (const sp of b.species || []) {
+      let e = bySpecies.get(sp.name);
+      if (!e) {
+        e = { ...sp, reports: 0 };
+        bySpecies.set(sp.name, e);
+      }
+      e.reports += sp.reports || 0;
+      // 保留任意一份 links / english_name / latin_name（都相同）
+    }
+  }
+  const species = Array.from(bySpecies.values()).map((sp) => ({
+    ...sp,
+    frequency_pct: total_reports ? Math.round((1000 * sp.reports) / total_reports) / 10 : 0,
+  }));
+  species.sort((a, b) => b.reports - a.reports || a.name.localeCompare(b.name, "zh"));
+
+  const months = {};
+  for (const b of ok)
+    for (const [m, cnt] of Object.entries(b.months || {}))
+      months[m] = (months[m] || 0) + cnt;
+
+  const reports = [];
+  const seen = new Set();
+  for (const b of ok)
+    for (const r of b.reports || []) {
+      if (r.report_id && seen.has(r.report_id)) continue;
+      if (r.report_id) seen.add(r.report_id);
+      reports.push(r);
+    }
+  reports.sort((a, b) => String(b.time || "").localeCompare(a.time || ""));
+
+  return {
+    id: pointIds[0],
+    name: ok[0].name,
+    region: ok[0].region,
+    total_reports,
+    species_count: species.length,
+    data_status: total_reports === 0 ? "none" : total_reports < 15 ? "thin" : "ok",
+    months,
+    peak_month: Object.entries(months).sort((a, b) => b[1] - a[1])[0]?.[0] || null,
+    species,
+    reports,
+    _mergedFrom: pointIds.length,
+  };
+}
+
 // ===== 鸟点叶子页名录 =====
-function PointChecklist({ pointId, region, picker, marks, toggle, setNote, onWhere, onShowTargets, markCount, onBack }) {
+function PointChecklist({ pointIds, displayName, region, picker, marks, toggle, setNote, onWhere, onShowTargets, markCount, onBack }) {
   const [pb, setPb] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showReports, setShowReports] = useState(false);
 
+  // pointIds 相同就不重拉（stringify 稳定）
+  const key = pointIds.join("|");
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    (async () => {
-      try {
-        const r = await fetch(`/data/regions/points/${encodeURIComponent(pointId)}.json`);
-        const b = r.ok ? await r.json() : null;
-        if (alive) setPb(b);
-      } catch {
-        if (alive) setPb(null);
-      } finally {
-        if (alive) setLoading(false);
+    loadMergedPoint(pointIds).then((b) => {
+      if (alive) {
+        setPb(b);
+        setLoading(false);
       }
-    })();
+    });
     return () => {
       alive = false;
     };
-  }, [pointId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
 
   const species = pb?.species || [];
   const n = pb?.total_reports ?? 0;
   const reports = pb?.reports || [];
   const pending = reports.filter((r) => !r.has_detail).length;
   const note = seasonNote(pb?.months);
+  const merged = pb?._mergedFrom > 1 ? pb._mergedFrom : 0;
 
   return (
     <>
@@ -236,7 +304,12 @@ function PointChecklist({ pointId, region, picker, marks, toggle, setNote, onWhe
 
       <div className="rg-crumb">
         <a onClick={onBack}>↩ {region}</a> ›{" "}
-        <span className="cur">{pb?.name || pointId}</span>
+        <span className="cur">{displayName || pb?.name || pointIds[0]}</span>
+        {merged > 0 && (
+          <span className="crumb-badge" title="来自多个同名 pointId 的记录已合并">
+            合并 {merged} 处
+          </span>
+        )}
       </div>
 
       {!loading && species.length > 0 && (
@@ -310,7 +383,7 @@ function PointChecklist({ pointId, region, picker, marks, toggle, setNote, onWhe
 
       {showReports && (
         <ReportList
-          label={pb?.name || pointId}
+          label={displayName || pb?.name || pointIds[0]}
           reports={reports}
           scope="全部"
           onClose={() => setShowReports(false)}
@@ -351,7 +424,10 @@ export default function PageRegion({ regionId, pickedPointId, onBackToRegion, pi
   if (loading) return <div className="empty">加载中…</div>;
   if (!bundle) return <div className="empty">该地区暂无概览数据</div>;
 
-  const { region, city, overview, spots } = bundle;
+  const { region, city, overview, spots: rawSpots } = bundle;
+  // 规范化合并同类项：拉市海湿地公园 + 拉市海候鸟湾 + 拉市海 → 拉市海（1 圈）
+  // 老君山自然中心 + 老君山国家级名胜风景区 → 老君山。map/排行都用这版。
+  const spots = groupSpotsByCanonical(rawSpots);
   const cityShort = (city || "").replace(/(市|地区|自治州)$/, "");
   const best = spots[0];
   const bestQual = best
@@ -359,20 +435,24 @@ export default function PageRegion({ regionId, pickedPointId, onBackToRegion, pi
       ? "样本仅 1 份"
       : "丰富又靠谱"
     : "";
-  const withCoords = overview.with_coords ?? spots.filter((s) => s.lat != null).length;
+  const withCoords = spots.filter((s) => s.lat != null).length;
 
-  // 父组件预选中的鸟点：从 bundle.spots 里找它，用它的元数据渲染叶子页；
-  // 找不到也不阻断 —— PointChecklist 会自己按 pointId 拉 /data/regions/points/<id>.json。
+  // 父组件预选中的鸟点：先在合并后的 spots 里找，找不到再回退到 rawSpots，
+  // 都找不到就用 pickedPointId 自己（PointChecklist 会自己按 id 拉 bundle）。
   const externalPick = pickedPointId
-    ? spots.find((s) => s.id === pickedPointId) || { id: pickedPointId, name: pickedPointId }
+    ? spots.find((s) => s.id === pickedPointId || s.raw.some((r) => r.id === pickedPointId)) ||
+      { id: pickedPointId, name: pickedPointId, raw: [{ id: pickedPointId }] }
     : null;
   const activePick = picked || externalPick;
 
   if (activePick) {
+    // picked 来自地图/排行 click，其 raw 已合并；externalPick 也带 raw
+    const pointIds = (activePick.raw || [{ id: activePick.id }]).map((r) => r.id);
     return (
       <div className="wf">
         <PointChecklist
-          pointId={activePick.id}
+          pointIds={pointIds}
+          displayName={activePick.name}
           region={`${region}`}
           picker={picker}
           marks={marks}
