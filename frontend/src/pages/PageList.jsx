@@ -1,23 +1,24 @@
 import { useEffect, useState } from "react";
-import QueryBar from "../components/QueryBar.jsx";
 import ReportList from "../components/ReportList.jsx";
 import TargetList from "../components/TargetList.jsx";
 import SpeciesLocations from "../components/SpeciesLocations.jsx";
 import SpeciesChecklist from "../components/SpeciesChecklist.jsx";
+import LocationPicker from "../components/LocationPicker.jsx";
+import Info from "../components/Info.jsx";
 import PageRegion from "./PageRegion.jsx";
 import { useMarks } from "../hooks/useMarks.js";
+import { IS_PUBLIC } from "../lib/mode.js";
 
-export default function PageList({ stops, stopId, onStop, regions = [] }) {
+export default function PageList({ cities, city, onCity, currentCity, stopId, onStop, regions = [] }) {
   const [bundle, setBundle] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showReports, setShowReports] = useState(false);
   const [showTargets, setShowTargets] = useState(false);
   const [onlyTarget, setOnlyTarget] = useState(false);
-  const [showFreq, setShowFreq] = useState(false);
   const [whereSpecies, setWhereSpecies] = useState(null);
   const { marks, toggle, setNote, importMarks } = useMarks();
 
-  // 地点停在「地区(市)级」且有概览数据 → 走面→点收敛流程（地图 + 鸟点排行）。
+  // 当前 stopId 是地区（非鸟点） → 走面→点收敛流程（地图 + 鸟点排行）。
   const region = regions.find((r) => r.id === stopId);
 
   useEffect(() => {
@@ -43,15 +44,15 @@ export default function PageList({ stops, stopId, onStop, regions = [] }) {
   const markCount = Object.keys(marks).length;
   const targetCount = Object.values(marks).filter((m) => m.target).length;
 
-  // 地点槽：所有停留点下拉（地区模式与名录模式共用）
-  const locSelect = (
-    <select value={stopId} onChange={(e) => onStop(e.target.value)}>
-      {stops.map((s) => (
-        <option key={s.id} value={s.id}>
-          {s.label}
-        </option>
-      ))}
-    </select>
+  const picker = (
+    <LocationPicker
+      cities={cities}
+      city={city}
+      onCity={onCity}
+      currentCity={currentCity}
+      stopId={stopId}
+      onStop={onStop}
+    />
   );
 
   // 共用弹窗（两种模式都可能打开）：我的鸟种 / 在哪里见过
@@ -77,7 +78,7 @@ export default function PageList({ stops, stopId, onStop, regions = [] }) {
       <>
         <PageRegion
           regionId={stopId}
-          locSelect={locSelect}
+          picker={picker}
           marks={marks}
           toggle={toggle}
           setNote={setNote}
@@ -95,7 +96,7 @@ export default function PageList({ stops, stopId, onStop, regions = [] }) {
   const status = bundle?.data_status;
   const n = bundle?.total_reports_month ?? 0;
   const reports = bundle?.reports || [];
-  const stop = stops.find((s) => s.id === stopId);
+  const stop = (currentCity?.points || []).find((s) => s.id === stopId);
   const shownSpecies = onlyTarget ? species.filter((s) => marks[s.name]?.target) : species;
 
   const years = bundle?.report_years || {};
@@ -129,20 +130,14 @@ export default function PageList({ stops, stopId, onStop, regions = [] }) {
 
   return (
     <div className="wf">
-      <div className="wf-desc">行程驱动的「时间 + 地点 → 鸟种」</div>
-
-      <QueryBar where={locSelect} when="6 月（行程月）" what="" answer="what" />
-
-      {stop?.region && <div className="region">📍 {stop.region}</div>}
+      {picker}
 
       {status !== "none" && species.length > 0 && (
         <div className="concl">
           <span className="k">速读</span>
           <span className="v">
-            6 月共报告 {species.length} 种{" "}
-            <small>
-              · 最常见「{species[0].name}」{species[0].frequency_pct}%
-            </small>
+            6 月共 {species.length} 种
+            <small> · 最常见「{species[0].name}」{species[0].frequency_pct}%</small>
           </span>
         </div>
       )}
@@ -152,10 +147,22 @@ export default function PageList({ stops, stopId, onStop, regions = [] }) {
           {status === "none" ? (
             "本地暂无该段报告"
           ) : status === "thin" ? (
-            <>仅 {reportLink} · 样本薄，频率仅供参考</>
+            <>仅 {reportLink} · 样本薄</>
           ) : (
-            <>基于 {reportLink} · 行程月</>
+            <>基于 {reportLink}</>
           )}
+          <Info label="频率与样本口径">
+            <p>
+              <b>频率 = 含该鸟的报告数 ÷ 该地当月总报告数 × 100。</b>
+              和 eBird 的 frequency 同口径：衡量遇见率，不是数量多少。
+            </p>
+            {pending > 0 && !IS_PUBLIC && (
+              <p className="fi-warn">
+                分母里有 {pending} 份"明细待抓"，会拉低频率 —— 补抓后自动上调。
+              </p>
+            )}
+            {yearStr && <p className="fi-year">样本年份：{yearStr} 6 月合并。</p>}
+          </Info>
         </div>
         <div className="list-tools">
           <button type="button" className="btn sm" onClick={() => setShowTargets(true)}>
@@ -174,46 +181,19 @@ export default function PageList({ stops, stopId, onStop, regions = [] }) {
         </div>
       </div>
 
-      {status !== "none" && species.length > 0 && (
-        <div className="freqinfo">
-          <button type="button" className="fi-toggle" onClick={() => setShowFreq((v) => !v)}>
-            ⓘ 频率怎么算{showFreq ? "（收起）" : ""}
-          </button>
-          {showFreq && (
-            <div className="fi-body">
-              <p>
-                <b>频率 = 含该鸟的报告数 ÷ 该地 6 月总报告数 × 100。</b>
-                和 eBird 的「frequency」同口径：衡量的是<b>遇见率</b>（多少份清单记录到它），不是数量多少。
-              </p>
-              {pending > 0 && (
-                <p className="fi-warn">
-                  注意：现在分母里有 {pending} 份报告是「明细待抓」（声明有鸟、但后台还没抓到鸟种清单），
-                  所以这些鸟的频率<b>偏低</b> —— 等明细补抓完会自动上调。点上方「{n} 份报告」可逐份核对。
-                </p>
-              )}
-              {yearStr && (
-                <p className="fi-year">
-                  样本年份：{yearStr} 6 月合并。<small>（已包含往年同期数据；样本越薄、越靠合并历年补足）</small>
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
       {loading ? (
         <div className="empty">加载中…</div>
       ) : status === "none" || !species.length ? (
         <div className="empty">
           <div className="big">这一段暂无物种记录</div>
           {stop?.province === "西藏"
-            ? "阿里等偏远段在中国观鸟记录中心本就稀疏；可换拉萨/日喀则段，或等抓取补充。"
-            : "该地行程月样本不足；可换相邻停留点。"}
+            ? "阿里等偏远段样本本就稀疏；可换拉萨/日喀则段。"
+            : "该地行程月样本不足；可换相邻鸟点。"}
         </div>
       ) : onlyTarget && shownSpecies.length === 0 ? (
         <div className="empty">
           <div className="big">这一段没有你的目标鸟种</div>
-          已收藏 {targetCount} 种目标，但这段 6 月记录里都没出现；可取消「只看目标」看全部。
+          已收藏 {targetCount} 种，可取消「只看目标」看全部。
         </div>
       ) : (
         <SpeciesChecklist
@@ -233,7 +213,7 @@ export default function PageList({ stops, stopId, onStop, regions = [] }) {
           </span>
         </div>
         <button className="btn solid" onClick={exportList} disabled={!species.length}>
-          ⤓ 导出目标鸟单
+          ⤓ 导出鸟单
         </button>
       </div>
 

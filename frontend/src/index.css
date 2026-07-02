@@ -1659,3 +1659,279 @@ body {
   white-space: nowrap;
   margin-left: 6px;
 }
+
+/* ============================================================
+   v0.9 对外展示：ⓘ 提示 + 城市/鸟点两维选择器 + 响应式。
+   ============================================================ */
+
+/* ⓘ 提示：默认圆点小图标，hover/focus/tap 展开 pop */
+.info-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+.info-btn {
+  border: 1.5px solid var(--line);
+  background: #fff;
+  color: var(--ink-soft);
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+}
+.info-btn:hover,
+.info-wrap.open .info-btn {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+.info-pop {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 220px;
+  max-width: min(300px, 80vw);
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 11px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  box-shadow: 0 6px 18px rgba(40, 38, 33, 0.14);
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.12s, transform 0.12s;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.info-pop--left {
+  left: auto;
+  right: 0;
+}
+.info-wrap:hover .info-pop,
+.info-wrap.open .info-pop,
+.info-btn:focus + .info-pop {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.info-pop p {
+  margin: 0 0 5px;
+}
+.info-pop p:last-child {
+  margin-bottom: 0;
+}
+.info-pop b {
+  color: var(--ink);
+}
+
+/* 城市 + 鸟点 两维选择器 */
+.locpick {
+  display: flex;
+  gap: 10px;
+}
+.locslot {
+  flex: 1;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  cursor: pointer;
+}
+.locslot .lab {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+}
+.locslot select,
+.locslot input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+  font-family: inherit;
+  width: 100%;
+  padding: 0;
+}
+.locslot select:disabled {
+  color: var(--line);
+  cursor: not-allowed;
+}
+
+/* 占位地图页轻量版 */
+.map-ph-in {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 13px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.map-ph-title {
+  font-size: 17px;
+  color: var(--ink);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.map-ph-sub {
+  font-size: 12px;
+}
+
+/* ============================================================
+   响应式：≤ 640px 手机端布局收敛。
+   目标：qbar 换行、名录行堆叠、地图变矮、tab hint 隐藏。
+   ============================================================ */
+@media (max-width: 640px) {
+  .app {
+    padding: 14px 10px 30px;
+  }
+  .app-head h1 {
+    font-size: 20px;
+  }
+
+  /* Tabs 手机上把口径 combo 隐掉，用 ⓘ 顶上 */
+  .tab .combo {
+    display: none;
+  }
+  .tabs {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .tab {
+    padding: 5px 11px;
+    font-size: 13px;
+  }
+
+  .wf {
+    padding: 14px 12px;
+    gap: 12px;
+    border-radius: 10px;
+  }
+
+  /* 城市/鸟点堆叠 */
+  .locpick,
+  .qbar {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* meta：结论条+工具堆叠 */
+  .meta {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .list-tools {
+    flex-wrap: wrap;
+  }
+
+  /* 结论条稍小 */
+  .concl {
+    padding: 8px 11px;
+  }
+  .concl .v {
+    font-size: 15px;
+  }
+
+  /* 名录 web 行 → 双行堆叠：名字上、频率+标记下 */
+  .wlist-h {
+    display: none;
+  }
+  .wr {
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    padding: 10px 4px;
+  }
+  .wr .wfreq {
+    grid-column: 2;
+    grid-row: 1;
+    align-items: flex-end;
+  }
+  .wr .wfb {
+    width: 56px;
+  }
+  .wr .wmarks {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    gap: 5px;
+  }
+  .wmk {
+    padding: 3px 8px;
+    font-size: 12px;
+  }
+
+  /* 地区概览：地图变矮、排行列裁掉次要指标 */
+  #map {
+    height: 240px;
+  }
+  .splist-h,
+  .sprow {
+    grid-template-columns: 22px 1fr 68px 22px;
+    gap: 6px;
+    padding: 8px 4px;
+  }
+  .splist-h .metric2col,
+  .sprow .metric2 {
+    display: none;
+  }
+  /* 直接第 4 列（清单数）隐掉 */
+  .splist-h > span:nth-child(4),
+  .sprow > .metric2 {
+    display: none;
+  }
+  .metricbig .b {
+    width: 60px;
+  }
+  .bz-hint {
+    display: none;
+  }
+
+  /* 柱图 & take 收敛 */
+  .bars {
+    height: 140px;
+    gap: 4px;
+  }
+  .take {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* 报告 modal 手机端 */
+  .modal {
+    max-width: 100%;
+    max-height: 88vh;
+  }
+  .rl-head,
+  .rl-row {
+    grid-template-columns: 68px 1fr 60px;
+    gap: 6px;
+    padding: 8px 12px;
+  }
+  .rl-head > span:nth-child(3),
+  .rl-row > .p {
+    display: none;
+  }
+}

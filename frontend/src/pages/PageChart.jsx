@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import QueryBar from "../components/QueryBar.jsx";
+import Info from "../components/Info.jsx";
+import { IS_PUBLIC } from "../lib/mode.js";
 
 const M = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
 
@@ -43,7 +44,6 @@ export default function PageChart({ provinces, taxa }) {
         const b = resp.ok ? await resp.json() : null;
         if (alive) {
           setBundle(b);
-          // 默认选当省报告最多的种，省得用户面对空图
           if (b?.species?.length && !b.species.find((s) => s.name === taxon)) {
             const top = [...b.species].sort(
               (a, c) => c.monthly.reduce((x, y) => x + y, 0) - a.monthly.reduce((x, y) => x + y, 0)
@@ -68,13 +68,9 @@ export default function PageChart({ provinces, taxa }) {
 
   return (
     <div className="wf">
-      <div className="wf-tag">
-        <b>何时去</b>
-        <span className="combo">地 + 鸟 → 时</span>
-      </div>
-
-      <QueryBar
-        where={
+      <div className="locpick">
+        <label className="locslot">
+          <span className="lab">🏙️ 省份</span>
           <select value={province} onChange={(e) => setProvince(e.target.value)}>
             {provinces.map((p) => (
               <option key={p} value={p}>
@@ -82,18 +78,17 @@ export default function PageChart({ provinces, taxa }) {
               </option>
             ))}
           </select>
-        }
-        when=""
-        what={
+        </label>
+        <label className="locslot">
+          <span className="lab">🐦 鸟种</span>
           <input
             value={taxon}
             onChange={(e) => setTaxon(e.target.value)}
             list="taxon-options"
             placeholder="输入鸟名"
           />
-        }
-        answer="when"
-      />
+        </label>
+      </div>
       {taxa.length > 0 && (
         <datalist id="taxon-options">
           {taxa.slice(0, 1500).map((t) => (
@@ -108,8 +103,8 @@ export default function PageChart({ provinces, taxa }) {
         <div className="concl">
           <span className="k">最佳窗口</span>
           <span className="v">
-            {M[win.lo]} – {M[win.hi]} 月{" "}
-            <small>· 当地遇见率峰值 {win.max}%</small>
+            {M[win.lo]} – {M[win.hi]} 月
+            <small> · 峰值 {win.max}%</small>
           </span>
         </div>
       )}
@@ -117,7 +112,7 @@ export default function PageChart({ provinces, taxa }) {
       {!rows ? (
         <div className="empty">
           <div className="big">没有这种鸟的本地记录</div>
-          换个鸟名，或在「看什么」页先看该地报告过哪些种。
+          换个鸟名试试。
         </div>
       ) : (
         <div className="chart">
@@ -160,13 +155,17 @@ export default function PageChart({ provinces, taxa }) {
         </div>
       )}
 
-      <div className="callout">
-        <b>口径：</b>柱高＝当地当月「报告该鸟的份数 / 总报告份数」。斜纹柱＝当月样本 &lt;15
-        份，仅供参考。迁徙「在/走」状态层、叠加第二种找窗口交集在 Backlog。
-      </div>
-
       <div className="take">
-        <div className="trust">{taxon ? `${province} · ${taxon}` : province} · 基于 {totalReports} 份报告</div>
+        <div className="trust">
+          {taxon ? `${province} · ${taxon}` : province} · {totalReports} 份报告
+          <Info label="口径">
+            <p>
+              柱高 = 当月「报告该鸟的份数 / 总报告份数」。
+            </p>
+            <p>斜纹柱 = 当月样本 &lt; 15 份，仅供参考。</p>
+            {!IS_PUBLIC && <p>迁徙"在/走"状态层、多物种叠加窗口交集在 Backlog。</p>}
+          </Info>
+        </div>
       </div>
     </div>
   );

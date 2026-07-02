@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PageList from "./pages/PageList.jsx";
 import PageChart from "./pages/PageChart.jsx";
 import PageMap from "./pages/PageMap.jsx";
 import ScrapeStatus from "./components/ScrapeStatus.jsx";
+import Info from "./components/Info.jsx";
+import { IS_PUBLIC } from "./lib/mode.js";
+import { groupByCity, cityOfStop } from "./lib/locations.js";
 
 const TABS = [
   { id: "list", name: "看什么", combo: "地+时→鸟" },
@@ -19,12 +22,15 @@ const initialPage = () => {
 export default function App() {
   const [page, setPage] = useState(initialPage);
 
-  // 共享数据：行程停留点 / 省份名 / 物种名录
+  // 共享数据：行程停留点 / 省份名 / 物种名录 / 地区概览
   const [stops, setStops] = useState([]);
-  const [stopId, setStopId] = useState("");
   const [provinces, setProvinces] = useState(["云南", "西藏"]);
   const [taxa, setTaxa] = useState([]);
   const [regions, setRegions] = useState([]);
+
+  // 地点：拆成 城市 + 鸟点 两维（对外版关键改动）
+  const [city, setCity] = useState("");
+  const [stopId, setStopId] = useState(""); // 选中的具体鸟点 or 地区概览 id；空 = 该市概览默认
 
   useEffect(() => {
     (async () => {
@@ -32,15 +38,7 @@ export default function App() {
         const r = await fetch("/data/trip/manifest.json");
         if (r.ok) {
           const m = await r.json();
-          if (Array.isArray(m.stops) && m.stops.length) {
-            setStops(m.stops);
-            // 默认选第一个**有物种明细**的停留点（光有报告数不够，没 observation
-            // 就是空清单），避免一进来就是空页。
-            const firstWithSpecies =
-              m.stops.find((s) => s.species_count_month > 0) ||
-              m.stops.find((s) => s.data_status !== "none");
-            setStopId((firstWithSpecies || m.stops[0]).id);
-          }
+          if (Array.isArray(m.stops) && m.stops.length) setStops(m.stops);
         }
       } catch {
         /* 无 manifest 时名录页自会显示空态 */
@@ -78,6 +76,31 @@ export default function App() {
     })();
   }, []);
 
+  const cities = useMemo(() => groupByCity(stops, regions), [stops, regions]);
+
+  // Bootstrap：数据到手后自动挑一个"有物种明细"的默认组合，避免开屏空白。
+  useEffect(() => {
+    if (!cities.length || city) return;
+    const firstWithSpecies =
+      stops.find((s) => s.species_count_month > 0) || stops.find((s) => s.data_status !== "none");
+    const defCity = firstWithSpecies ? cityOfStop(firstWithSpecies.id, cities) : cities[0].name;
+    setCity(defCity || cities[0].name);
+  }, [cities, stops, city]);
+
+  // 城市换了：默认选该市的地区概览（有则用 regionId）或第一个鸟点。
+  useEffect(() => {
+    if (!city) return;
+    const c = cities.find((x) => x.name === city);
+    if (!c) return;
+    // stopId 已属于当前城市 → 保持；否则重置
+    const belongs =
+      c.regionId === stopId || c.points.some((p) => p.id === stopId);
+    if (belongs) return;
+    setStopId(c.regionId || c.points[0]?.id || "");
+  }, [city, cities, stopId]);
+
+  const currentCity = cities.find((c) => c.name === city);
+
   return (
     <div className="app">
       <div className="app-head">
@@ -102,8 +125,13 @@ export default function App() {
         </div>
       </div>
 
-      <ScrapeStatus src="/data/scrape_status.json" noun="鸟种明细" />
-      <ScrapeStatus src="/data/coords_status.json" noun="坐标" manualCaptcha />
+      {/* 顶部抓取进度条：只在本地/调试版显示（对外版 IS_PUBLIC=1 时隐藏） */}
+      {!IS_PUBLIC && (
+        <>
+          <ScrapeStatus src="/data/scrape_status.json" noun="鸟种明细" />
+          <ScrapeStatus src="/data/coords_status.json" noun="坐标" manualCaptcha />
+        </>
+      )}
 
       <div className="tabs">
         {TABS.map((t) => (
@@ -118,13 +146,29 @@ export default function App() {
             }}
           >
             {t.name}
-            <span className="combo">{t.combo}</span>
+            {/* 对外版把"地+时→鸟"这种口径提示藏进 ⓘ；本地版直接露出 */}
+            {!IS_PUBLIC && <span className="combo">{t.combo}</span>}
           </button>
         ))}
+        {IS_PUBLIC && (
+          <Info label="三页口径">
+            <b>看什么</b> 地 + 时 → 鸟<br />
+            <b>去哪看</b> 时 + 鸟 → 地<br />
+            <b>何时去</b> 地 + 鸟 → 时
+          </Info>
+        )}
       </div>
 
       {page === "list" && (
-        <PageList stops={stops} stopId={stopId} onStop={setStopId} regions={regions} />
+        <PageList
+          cities={cities}
+          city={city}
+          onCity={setCity}
+          currentCity={currentCity}
+          stopId={stopId}
+          onStop={setStopId}
+          regions={regions}
+        />
       )}
       {page === "chart" && <PageChart provinces={provinces} taxa={taxa} />}
       {page === "map" && <PageMap />}

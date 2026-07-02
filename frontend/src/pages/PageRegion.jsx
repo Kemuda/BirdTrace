@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import QueryBar from "../components/QueryBar.jsx";
 import SpeciesChecklist from "../components/SpeciesChecklist.jsx";
 import ReportList from "../components/ReportList.jsx";
+import Info from "../components/Info.jsx";
+import { IS_PUBLIC } from "../lib/mode.js";
 
-// 地区概览（面→点收敛中间页，定稿自 birdtrace-mockup-v3）。
-// 地点停在「地区(市)级」时：先用地图 + 鸟点排行帮用户从面收敛到一个具体鸟点，
-// 再点进该点的鸟种名录（叶子页）。排行口径 = 全部记录（这个点丰不丰富、可不可靠
-// 看全部证据，对齐 eBird Hotspot）；行程月的过滤留在叶子页里诚实说明。
+// 地区概览（面→点收敛中间页）。选中"整个市（地区概览）"时：
+// 地图 + 鸟点排行帮用户从面收敛到一个具体鸟点，再点进该点的鸟种名录（叶子页）。
+// 排行口径 = 全部记录（对齐 eBird Hotspot）；行程月的过滤留在叶子页里。
 
 const SORTS = [
   { k: "nsp", lab: "鸟种数", unit: "种" },
@@ -17,7 +17,6 @@ const SORTS = [
 ];
 const TOP = 8;
 
-// 月份直方图 → 「样本以 X 月为主」（取报告最多的 1–2 个月）
 function seasonNote(months) {
   const entries = Object.entries(months || {}).sort((a, b) => b[1] - a[1]);
   if (!entries.length) return "";
@@ -45,9 +44,9 @@ function RegionMap({ spots, onPick }) {
 
     const maxSp = Math.max(...spots.map((s) => s.nsp), 1);
     pts.forEach((s, i) => {
-      const weak = s.nck <= 1; // 单清单点 = 一次记录，灰化
-      const top1 = i === 0; // spots 已按 nsp 排序，第一个 = ★最值得去
-      const r = 5 + 15 * Math.sqrt(s.nsp / maxSp); // 面积 = √鸟种丰富度
+      const weak = s.nck <= 1;
+      const top1 = i === 0;
+      const r = 5 + 15 * Math.sqrt(s.nsp / maxSp);
       const m = L.circleMarker([s.lat, s.lng], {
         radius: r,
         weight: 1.5,
@@ -71,7 +70,7 @@ function RegionMap({ spots, onPick }) {
     const homeBounds = L.latLngBounds(pts.map((s) => [s.lat, s.lng])).pad(0.12);
     map.fitBounds(homeBounds);
 
-    // —— Shift 框选放大 提示 + 复位（对齐 mockup）——
+    // Shift 框选放大（仅桌面端有键盘 → 移动端会自动隐藏，CSS 里控制）
     const BoxCtl = L.Control.extend({
       options: { position: "topright" },
       onAdd() {
@@ -120,7 +119,13 @@ function SpotRanking({ spots, onPick }) {
     <>
       <div className="meta">
         <div className="trust">
-          基于 {spots.reduce((n, s) => n + s.nck, 0)} 份清单 · {spots.length} 个鸟点
+          {spots.reduce((n, s) => n + s.nck, 0)} 份清单 · {spots.length} 个鸟点
+          <Info label="怎么读排行">
+            <p>
+              <b>鸟种数</b> 看点的丰富度；<b>清单数</b> 看这个数字有多可靠。两者都高才稳妥。
+            </p>
+            <p>灰色行 = 仅 1 份清单，只是某一次记录，不代表稳定可见。</p>
+          </Info>
         </div>
         <div className="sortbar">
           <span>排序</span>
@@ -195,11 +200,10 @@ function SpotRanking({ spots, onPick }) {
 }
 
 // ===== 鸟点叶子页名录 =====
-function PointChecklist({ pointId, region, locSelect, marks, toggle, setNote, onWhere, onShowTargets, markCount, onBack }) {
+function PointChecklist({ pointId, region, picker, marks, toggle, setNote, onWhere, onShowTargets, markCount, onBack }) {
   const [pb, setPb] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showReports, setShowReports] = useState(false);
-  const [showFreq, setShowFreq] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -228,29 +232,19 @@ function PointChecklist({ pointId, region, locSelect, marks, toggle, setNote, on
 
   return (
     <>
-      <QueryBar
-        where={locSelect}
-        when={<>全部记录 {pb?.peak_month && <span className="region">· {note}</span>}</>}
-        what=""
-        answer="what"
-      />
+      {picker}
 
       <div className="rg-crumb">
         <a onClick={onBack}>↩ {region}</a> ›{" "}
         <span className="cur">{pb?.name || pointId}</span>
-        <span className="redo" onClick={onBack}>
-          ↺ 换鸟点
-        </span>
       </div>
 
       {!loading && species.length > 0 && (
         <div className="concl">
           <span className="k">速读</span>
           <span className="v">
-            该点共记录 {species.length} 种{" "}
-            <small>
-              · 最常见「{species[0].name}」{species[0].frequency_pct}%
-            </small>
+            该点共 {species.length} 种
+            <small> · 最常见「{species[0].name}」{species[0].frequency_pct}%</small>
           </span>
         </div>
       )}
@@ -264,10 +258,22 @@ function PointChecklist({ pointId, region, locSelect, marks, toggle, setNote, on
               基于{" "}
               <button type="button" className="rlink" onClick={() => setShowReports(true)}>
                 {n} 份清单
-              </button>{" "}
-              · 全部记录{pb?.data_status === "thin" ? "（样本薄，仅供参考）" : ""}
+              </button>
+              {pb?.data_status === "thin" ? "（样本薄）" : ""}
             </>
           )}
+          <Info label="频率与样本口径">
+            <p>
+              <b>频率 = 含该鸟的清单数 ÷ 该点总清单数 × 100。</b>
+              和 eBird 的 frequency 同口径。这里合并<b>该鸟点全部记录</b>，不限月份。
+            </p>
+            {pending > 0 && !IS_PUBLIC && (
+              <p className="fi-warn">
+                {pending} 份清单"明细待抓"，会拉低频率 —— 补抓后自动上调。
+              </p>
+            )}
+            {note && <p className="fi-year">{note}。跨季频率仅作粗略参考。</p>}
+          </Info>
         </div>
         <div className="list-tools">
           <button type="button" className="btn sm" onClick={onShowTargets}>
@@ -276,35 +282,12 @@ function PointChecklist({ pointId, region, locSelect, marks, toggle, setNote, on
         </div>
       </div>
 
-      {!loading && species.length > 0 && (
-        <div className="freqinfo">
-          <button type="button" className="fi-toggle" onClick={() => setShowFreq((v) => !v)}>
-            ⓘ 频率怎么算{showFreq ? "（收起）" : ""}
-          </button>
-          {showFreq && (
-            <div className="fi-body">
-              <p>
-                <b>频率 = 含该鸟的清单数 ÷ 该点总清单数 × 100。</b>
-                和 eBird 的「frequency」同口径：衡量<b>遇见率</b>（多少份清单记到它），不是数量多少。
-                这里是<b>该鸟点全部记录</b>合并，不限月份。
-              </p>
-              {pending > 0 && (
-                <p className="fi-warn">
-                  注意：{pending} 份清单「明细待抓」（声明有鸟、后台还没抓到清单），会让频率偏低 —— 补抓完自动上调。
-                </p>
-              )}
-              {note && <p className="fi-year">{note}。不同季节物种会有差异，跨季频率仅作粗略参考。</p>}
-            </div>
-          )}
-        </div>
-      )}
-
       {loading ? (
         <div className="empty">加载中…</div>
       ) : species.length === 0 ? (
         <div className="empty">
           <div className="big">该点暂无鸟种明细</div>
-          有清单记录但明细还没抓到；可换排行里别的点，或等补抓补充。
+          可换排行里别的点。
         </div>
       ) : (
         <SpeciesChecklist
@@ -338,10 +321,10 @@ function PointChecklist({ pointId, region, locSelect, marks, toggle, setNote, on
 }
 
 // ===== 容器：概览 ↔ 鸟点名录 =====
-export default function PageRegion({ regionId, locSelect, marks, toggle, setNote, onWhere, onShowTargets, markCount }) {
+export default function PageRegion({ regionId, picker, marks, toggle, setNote, onWhere, onShowTargets, markCount }) {
   const [bundle, setBundle] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [picked, setPicked] = useState(null); // 选中的鸟点（drill 进名录）
+  const [picked, setPicked] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -368,36 +351,21 @@ export default function PageRegion({ regionId, locSelect, marks, toggle, setNote
 
   const { region, city, overview, spots } = bundle;
   const cityShort = (city || "").replace(/(市|地区|自治州)$/, "");
-  const best = spots[0]; // 已按 nsp 排序
+  const best = spots[0];
   const bestQual = best
     ? best.nck <= 1
-      ? "样本仅 1 份，仅供参考"
+      ? "样本仅 1 份"
       : "丰富又靠谱"
     : "";
   const withCoords = overview.with_coords ?? spots.filter((s) => s.lat != null).length;
 
-  // —— 已 drill 进某个鸟点：显示叶子页名录 ——
   if (picked) {
     return (
       <div className="wf">
-        <div className="wf-desc">行程驱动的「时间 + 地点 → 鸟种」· 已收敛到具体鸟点</div>
-        <div className="converge">
-          <span className="st done">
-            <span className="ic">✓</span>选定地区
-          </span>
-          <span className="arr">→</span>
-          <span className="st done">
-            <span className="ic">✓</span>选一个鸟点
-          </span>
-          <span className="arr">→</span>
-          <span className="st cur">
-            <span className="ic">3</span>看鸟种名录
-          </span>
-        </div>
         <PointChecklist
           pointId={picked.id}
           region={`${region}`}
-          locSelect={locSelect}
+          picker={picker}
           marks={marks}
           toggle={toggle}
           setNote={setNote}
@@ -410,40 +378,28 @@ export default function PageRegion({ regionId, locSelect, marks, toggle, setNote
     );
   }
 
-  // —— 地区概览：地图 + 鸟点排行 ——
   return (
     <div className="wf">
-      <div className="wf-desc">地点停在「地区」级 → 先收敛到一个具体鸟点，再看它能出什么鸟</div>
-
-      <QueryBar where={locSelect} when="6 月（行程月）" what="" answer="what" />
-      <div className="region">📍 {region} · 地区级（先收敛到鸟点）</div>
-
-      <div className="converge">
-        <span className="st done">
-          <span className="ic">✓</span>选定地区
-        </span>
-        <span className="arr">→</span>
-        <span className="st cur">
-          <span className="ic">2</span>选一个鸟点
-        </span>
-        <span className="arr">→</span>
-        <span className="st">
-          <span className="ic">3</span>看鸟种名录
-        </span>
-      </div>
+      {picker}
 
       <div className="rg-crumb">
         <span className="cur">{region}</span>
+        <Info label="怎么读地区概览">
+          <p>
+            地区级 → 先在地图/排行选一个鸟点，再看该点的鸟种名录。
+          </p>
+          <p>
+            覆盖 <b>{overview.checklists}</b> 份清单 / <b>{overview.obs}</b> 条记录。
+          </p>
+        </Info>
       </div>
 
       {best && (
         <div className="concl">
           <span className="k">速读</span>
           <span className="v">
-            {cityShort}共 {spots.length} 个鸟点 · 最值得去 <b>{best.name}</b>{" "}
-            <small>
-              （{best.nsp} 种 / {best.nck} 份清单，{bestQual}）
-            </small>
+            {cityShort} {spots.length} 个鸟点 · 最值得去 <b>{best.name}</b>
+            <small> （{best.nsp} 种 / {best.nck} 份清单{bestQual ? "，" + bestQual : ""}）</small>
           </span>
         </div>
       )}
@@ -459,29 +415,19 @@ export default function PageRegion({ regionId, locSelect, marks, toggle, setNote
               <span className="swatch" style={{ background: "#33312c" }} /> 多份清单
             </span>
             <span>
-              <span className="swatch" style={{ background: "#cfc9bd", border: "1px solid #b9b3a7" }} /> 仅 1
-              份清单（参考）
-            </span>
-            <span style={{ marginLeft: "auto", color: "var(--line)" }}>
-              圆越大＝鸟种越多 · 位置约略
+              <span className="swatch" style={{ background: "#cfc9bd", border: "1px solid #b9b3a7" }} /> 仅 1 份（参考）
             </span>
           </div>
         </>
       ) : (
-        <div className="callout">
-          <b>坐标抓取中：</b>这个地区的鸟点经纬度还没抓到，地图暂不可画 —— 下面的鸟点排行不受影响。
-          坐标补齐后地图会自动出现。
-        </div>
+        !IS_PUBLIC && (
+          <div className="callout">
+            <b>坐标抓取中：</b>坐标补齐后地图会自动出现，排行不受影响。
+          </div>
+        )
       )}
 
       <SpotRanking spots={spots} onPick={setPicked} />
-
-      <div className="rg-foot">
-        <b>怎么读：</b>「鸟种数」看一个点有多丰富，「清单数」看这个数字有多可靠 —— 两者都高才稳妥。
-        <b>灰色行</b>只有 1 份清单，是某一次记录、不代表稳定可见。点任意一行 → 进入该点的鸟种名录。
-        <br />
-        概览口径为<b>该地区全部记录</b>（共 {overview.checklists} 份清单 / {overview.obs} 条记录）。
-      </div>
     </div>
   );
 }
