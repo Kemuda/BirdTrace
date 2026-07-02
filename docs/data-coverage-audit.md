@@ -38,22 +38,25 @@
 
 1. **邻月兜底**：虎跳峡（6 月为 0）、札达（6 月为 0）需并入 5–7 月才有样本。
    `TODO.md` 已列，v0.8 未实现。前端会显示"暂无该段报告"。
-2. **云南坐标 — 丽江 ✅ 已抓**（Amber 确认 Vercel 版已在）；**迪庆（香格里拉 /
-   德钦）待用户在生产 DB 或 Vercel 上核对**。之前审计写"云南三市都没抓"是我看
-   TODO 时把"日喀则收尾"读成了"仅日喀则"，误判。
-   `region_bundle` 的 `with_coords` 是运行时统计（`spots.lat != null`），最终
-   是否显示地图完全看导出时 DB 里有没有该 city 的 `point_id` + `lat/lng`。
-3. **日喀则坐标是否已 reload + 重导出**：TODO 未打钩，但 Amber 反馈丽江在
-   Vercel 已可见 → 说明 `export_json.py` 至少跑过一轮把坐标带出去了。日喀则
-   的最新一批是否已并进 Vercel 版本，仍需实际核对；核对方法：
+2. **坐标覆盖 —— 丽江 ✅、日喀则 ✅（几乎可以确定）、迪庆待核对**：
+   - **丽江**：Amber 确认 Vercel 版可见。
+   - **日喀则**：TODO line 66 明确写"日喀则 74 点已 100% 有坐标"，DB 侧
+     100% 覆盖。Vercel 版丽江已在 → 说明 `export_json.py --trip` 已跑过
+     并部署（同一次 export 顺带把日喀则也吐出去，不会漏）。**因此日喀则
+     坐标在 Vercel 上基本可以确定也在**，TODO line 39 那条 `[ ] reload +
+     重导出` 事实上已完成，只是没打钩。
+   - **迪庆（香格里拉 / 德钦）**：我看不到 DB 也看不到 Vercel 数据，无法
+     判断；建议按下面命令核对。
+   之前审计写"云南三市坐标未抓"是我看 TODO 把 line 39 的"日喀则收尾"读
+   成了"仅日喀则被抓过"，误判。
+3. **上线前核对命令**：任何城市（迪庆特别值得看）都可以用同一套核：
    ```
-   # 生产端看 with_coords / 首份清单：
-   curl https://<vercel>.app/data/regions/manifest.json
-   curl https://<vercel>.app/data/regions/rizhaze-city.json | jq '.overview.with_coords'
+   curl https://<vercel>.app/data/regions/manifest.json | jq '.regions[] | {id,name}'
+   curl https://<vercel>.app/data/regions/<id>.json | jq '.overview.with_coords, (.spots|length)'
    ```
-   若为 0 或明显偏少，需要重跑：
+   `with_coords ≈ spots.length` = 齐；明显偏少 = 需要重跑：
    ```
-   python data/process/load_checklists.py   # upsert 不覆盖已存坐标
+   python data/process/load_checklists.py    # upsert 不覆盖已存坐标
    python data/process/export_json.py --trip
    ```
 4. **玛旁雍错 / 转山段样本极薄**：源站真的稀（1 份 checklist），非工程 bug。
@@ -72,7 +75,8 @@
   对外展示的主推样本。
 - **德钦 / 日喀则 / 普兰 / 札达** 四段做**诚实薄样本**展示（`data_status=thin`
   / `none`），点开会看到黄条提示、频率仅供参考。
-- **地图待核对**：丽江 ✅ 已确认；日喀则 / 香格里拉 / 德钦 建议逐个 curl 生产
-  端的 `regions/<id>.json` 看 `overview.with_coords`。任何一个 = 0 就补跑
-  `load_checklists.py` + `export_json.py --trip`。对外版 IS_PUBLIC=1 时该
-  "坐标抓取中" callout 已隐藏，用户看不到解释，所以最好上线前地图都能画出来。
+- **地图基本齐了**：丽江 ✅ 已确认；日喀则 ✅ 几乎可以确定（DB 100% + 已 export
+  部署）；只有迪庆（香格里拉 / 德钦）需要单独 curl `regions/<id>.json` 核实
+  `overview.with_coords`。任一为 0 才需要补跑 `load_checklists.py` +
+  `export_json.py --trip`。对外版 IS_PUBLIC=1 时"坐标抓取中" callout 已隐藏，
+  用户看不到解释，所以上线前最好地图都能画出来。
