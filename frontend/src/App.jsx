@@ -7,13 +7,15 @@ import Info from "./components/Info.jsx";
 import { IS_PUBLIC } from "./lib/mode.js";
 import { groupByCity, cityOfStop, PUBLIC_CITIES } from "./lib/locations.js";
 
-const TABS = [
+// "去哪看" 是占位页（等报告经纬度就位才能画热力）。对外 demo 里不露出这个死链。
+const ALL_TABS = [
   { id: "list", name: "看什么", combo: "地+时→鸟" },
-  { id: "map", name: "去哪看", combo: "时+鸟→地" },
+  { id: "map", name: "去哪看", combo: "时+鸟→地", devOnly: true },
   { id: "chart", name: "何时去", combo: "地+鸟→时" },
 ];
+const TABS = ALL_TABS.filter((t) => !(IS_PUBLIC && t.devOnly));
 
-const VALID = new Set(["list", "chart", "map"]);
+const VALID = new Set(TABS.map((t) => t.id));
 const initialPage = () => {
   const p = new URLSearchParams(window.location.search).get("p");
   return VALID.has(p) ? p : "list";
@@ -152,17 +154,10 @@ export default function App() {
             }}
           >
             {t.name}
-            {/* 对外版把"地+时→鸟"这种口径提示藏进 ⓘ；本地版直接露出 */}
+            {/* 内部/dev 版露口径 combo，对外版仅显示 tab 名字 */}
             {!IS_PUBLIC && <span className="combo">{t.combo}</span>}
           </button>
         ))}
-        {IS_PUBLIC && (
-          <Info label="三页口径">
-            <b>看什么</b> 地 + 时 → 鸟<br />
-            <b>去哪看</b> 时 + 鸟 → 地<br />
-            <b>何时去</b> 地 + 鸟 → 时
-          </Info>
-        )}
       </div>
 
       {page === "list" && (
@@ -184,7 +179,7 @@ export default function App() {
         <a href="https://birdreport.cn" target="_blank" rel="noreferrer">
           中国观鸟记录中心
         </a>
-        。非官方探索界面。
+        {IS_PUBLIC ? "" : " · 非官方探索界面"}
       </div>
     </div>
   );

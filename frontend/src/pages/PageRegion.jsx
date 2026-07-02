@@ -28,7 +28,7 @@ function seasonNote(months) {
 }
 
 // ===== 地图 =====
-function RegionMap({ spots, onPick, highlightedId }) {
+function RegionMap({ spots, onPick, highlightedId, compact }) {
   const elRef = useRef(null);
   const mapRef = useRef(null);
   const highlightLayerRef = useRef(null);
@@ -120,7 +120,6 @@ function RegionMap({ spots, onPick, highlightedId }) {
       highlightLayerRef.current = null;
     }
     if (!highlightedId) {
-      // 回到全境视图
       if (homeBoundsRef.current) map.fitBounds(homeBoundsRef.current);
       return;
     }
@@ -136,6 +135,15 @@ function RegionMap({ spots, onPick, highlightedId }) {
     highlightLayerRef.current = ring;
     map.setView([s.lat, s.lng], Math.max(map.getZoom(), 12), { animate: true });
   }, [highlightedId, spots]);
+
+  // compact 状态切换时容器高度变了 → 让 leaflet 重算尺寸，不然只看到左上角一小片。
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    // 等 CSS 过渡完（如果有）
+    const t = setTimeout(() => map.invalidateSize(), 60);
+    return () => clearTimeout(t);
+  }, [compact]);
 
   return <div id="map" ref={elRef} />;
 }
@@ -509,26 +517,29 @@ export default function PageRegion({ regionId, pickedPointId, onBackToRegion, pi
         </div>
       )}
 
-      {/* 地图 —— 概览/叶子页都保留，叶子页时把选中点画环高亮 */}
+      {/* 地图 —— 概览/叶子页都保留，叶子页时收缩成 "you are here" 缩略图 */}
       {withCoords > 0 ? (
-        <>
+        <div className={"map-wrap" + (activePick ? " map-wrap--compact" : "")}>
           <RegionMap
             spots={spots}
             onPick={setPicked}
             highlightedId={activePick?.id}
+            compact={!!activePick}
           />
-          <div className="map-cap">
-            <span>
-              <span className="swatch" style={{ background: "#d9a92e" }} /> 最值得去
-            </span>
-            <span>
-              <span className="swatch" style={{ background: "#33312c" }} /> 多份清单
-            </span>
-            <span>
-              <span className="swatch" style={{ background: "#cfc9bd", border: "1px solid #b9b3a7" }} /> 仅 1 份（参考）
-            </span>
-          </div>
-        </>
+          {!activePick && (
+            <div className="map-cap">
+              <span>
+                <span className="swatch" style={{ background: "#d9a92e" }} /> 最值得去
+              </span>
+              <span>
+                <span className="swatch" style={{ background: "#33312c" }} /> 多份清单
+              </span>
+              <span>
+                <span className="swatch" style={{ background: "#cfc9bd", border: "1px solid #b9b3a7" }} /> 仅 1 份（参考）
+              </span>
+            </div>
+          )}
+        </div>
       ) : (
         !IS_PUBLIC && (
           <div className="callout">

@@ -1366,10 +1366,20 @@ body {
   font-weight: 600;
   background: var(--paper-2);
 }
+.map-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 #map {
   height: 340px;
   border-radius: 12px;
   border: 1.5px solid var(--line-soft);
+  transition: height 0.2s;
+}
+/* 叶子页时地图收缩为 "you are here" 缩略图，把版面让给鸟种名录 */
+.map-wrap--compact #map {
+  height: 160px;
 }
 .map-cap {
   font-size: 11px;
@@ -1978,6 +1988,9 @@ body {
   /* 地区概览：地图变矮、排行列裁掉次要指标 */
   #map {
     height: 240px;
+  }
+  .map-wrap--compact #map {
+    height: 130px;
   }
   .splist-h,
   .sprow {
