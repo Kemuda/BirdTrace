@@ -228,3 +228,7 @@ frontend/public/data/
 # …but DO track the vendored reference maps (eBird taxonomy / ch4 fixes) —
 # the export needs them to build species links; they're not scraped artifacts.
 !data/raw/refs/
+
+# Multi-agent harness (agent.py) scratch output — inter-agent draft specs,
+# regenerated on every run; not source.
+birdtrace_workspace/
