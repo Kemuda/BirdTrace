@@ -5,6 +5,7 @@
 当前 MVP：**行程驱动的「时间 + 地点 → 鸟种」**。前端三页共用统一三槽查询条（地点 / 时间 / 鸟种，留空那一槽＝本页答案）：① **看什么**（名录，地+时→鸟，MVP 核心）② **何时去**（12 月柱状图，地+鸟→时）③ **去哪看**（地图，时+鸟→地，待经纬度）。详见 `docs/mvp-trip.md`。
 
 设计文档：`birdreport-prd.md`。  
+eBird Explore 对标研究：`docs/ebird-explore-research.md`（功能全景盘点 + 借鉴清单）。  
 第三方代码 / 数据来源的鸣谢与 License：`THIRD_PARTY_NOTICES.md`。
 
 ## 架构
