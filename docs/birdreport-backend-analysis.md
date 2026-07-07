@@ -68,7 +68,7 @@ birdreport.cn 是国内**最完整的民间鸟类公民科学数据库**，由**
 | `POST /front/taxon/search` | 明文 | 全量鸟种名录 | `taxon_id, name, latin_name, english_name, order_name, family_name` |
 | `POST /front/record/activity/search` | 加密 | 分页翻 checklist 列表 | `report_id, start_time, province, city, district, point_name, taxon_count, username`（**无 lat/lng**）|
 | `POST /front/activity/taxon` | 加密 | 逐报告拿物种观测 | `report_id, taxon_id, taxon_name, taxon_count, record_image_num` |
-| 省级概览 | 明文 | 36 省汇总 | 报告数（疑问/无疑问）、记录总数、鸟种数（含科目分类）|
+| 省级概览 | 需签名（响应体明文）| 36 省汇总 | 报告数（疑问/无疑问）、记录总数、鸟种数（含科目分类）|
 
 `report 1—N observation`、`observation N—1 taxon` 的规范化关系，明确指向一个**关系型数据库**。
 

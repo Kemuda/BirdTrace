@@ -2,9 +2,9 @@
 
 为[中国观鸟记录中心](https://birdreport.cn) 的数据构建更好的探索界面，对标 eBird Explorer。
 
-当前 MVP：**行程驱动的「时间 + 地点 → 鸟种」**。前端三页共用统一三槽查询条（地点 / 时间 / 鸟种，留空那一槽＝本页答案）：① **看什么**（名录，地+时→鸟，MVP 核心）② **何时去**（12 月柱状图，地+鸟→时）③ **去哪看**（地图，时+鸟→地，待经纬度）。详见 `docs/mvp-trip.md`。
+当前 **v0.2 · public demo + Explore 轮**：基于真实数据切片（云南 + 西藏行程期）的对外可演示 demo。界面按「地点 / 时间 / 鸟种」三维组织，留空哪一维＝本页答案：① **看什么**（名录 + 地区/鸟点 Explore 收敛，地+时→鸟，核心）② **何时去**（12 月柱状图，地+鸟→时）。**去哪看**（地图，时+鸟→地）是 dev-only 占位，待报告经纬度体系完善后开放，对外 demo 版隐藏。对外/dev 双版切换见 `frontend/src/lib/mode.js`（`IS_PUBLIC`）。详见 `docs/mvp-trip.md` 与现行规格 `birdtrace_workspace/product_spec.md`（v0.2）。
 
-设计文档：`birdreport-prd.md`。  
+设计文档：`docs/birdreport-prd.md`。  
 eBird Explore 对标研究：`docs/ebird-explore-research.md`（功能全景盘点 + 借鉴清单）。  
 第三方代码 / 数据来源的鸣谢与 License：`THIRD_PARTY_NOTICES.md`。
 
@@ -19,22 +19,32 @@ data/scraper/         直连 birdreport.cn 抓数据
   fetch_taxa.py            （备用）按 ID 扫鸟种详情
   fetch_checklists.py      加密 抓 checklist + observation（按省）
   fetch_trip.py            行程定向抓取：按行程区+历史同期月抓 checklist+observation
+  fetch_report_detail.py   加密 抓单份报告详情（坐标/pointId/address，供地图页「去哪看」）
   public_key.pem           前端 RSA 公钥
 
 data/process/         JSON → SQLite → 静态 JSON
   build_db.py              建表
   load_taxa.py / load_checklists.py   导入
   export_json.py           聚合输出到 frontend/public/data/（--province / --trip）
+  build_marks_seed.py      从 eBird CSV 生成"已见过"种子（前端加载即自动标记）
+  scrape_status.py         输出前端可轮询的抓取进度文件
 
 data/raw/refs/        vendored 参考映射（入库，非抓取产物，见 THIRD_PARTY_NOTICES）
   ebird_sci_to_code.json   eBird 学名→speciesCode（拼 eBird 物种页链接）
   ch4_to_eb_taxon_map.json birdreport→eBird 学名差异修正
   dongniao_name_to_nd.json 中文名→懂鸟分类编号（拼懂鸟物种页链接）
 
-frontend/             React + Vite + Tailwind
-  src/App.jsx              三页外壳 + 共享数据加载（?p=list|chart|map 深链）
-  src/components/          QueryBar（三槽查询条）
-  src/pages/               PageList 名录 / PageChart 柱图 / PageMap 地图占位
+frontend/             React + Vite + Tailwind + Leaflet
+  src/App.jsx              三页外壳（看什么 list / 何时去 chart / 去哪看 map，?p= 深链）
+                           + 共享数据加载；对外/dev 双版切换见 lib/mode.js（IS_PUBLIC）
+  src/pages/               PageList「看什么」名录 + 地区/鸟点 Explore（内嵌 PageRegion）
+                           PageChart「何时去」12 月柱图 / PageMap「去哪看」地图占位（dev-only）
+                           PageRegion 地区·鸟点 Explore / PageSpecies 鸟种 Explore
+  src/components/          LocationPicker 地点两维选择 · SpeciesChecklist 名录行
+                           · SpeciesLocations 鸟种反查地点 · TargetList 目标鸟 · ReportList 报告弹窗
+                           · ScrapeStatus 抓取进度 · Info（ⓘ 长解释）
+  src/lib/                 mode(IS_PUBLIC) · locations(城市白名单/两维地点) · spots(鸟点规范化合并) · exploreData
+  src/hooks/               useMarks（本地观测标记）
   public/data/             静态数据（由 export_json.py 写入，gitignore）
 ```
 

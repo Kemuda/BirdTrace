@@ -1,4 +1,6 @@
-# PRD v2.3：中国观鸟记录中心前端重建（birdtrace）
+# PRD（v0.1 设计稿 · 已归档）：中国观鸟记录中心前端重建（birdtrace）
+
+> **已归档（2026-07-07）**：本 PRD 是 `birdtrace_workspace/product_spec.md` 之前的原始设计稿。现行规格以 product_spec（v0.2 工作稿）+ design_spec 为准；下方 v2.x 变更记录为历史留档，不再更新。
 
 **产品名：** birdtrace　**项目代号：** birdreport-explorer
 **作者：** AK ＆ 设计协作
@@ -399,7 +401,7 @@ React + Vite 前端读取
 
 ```bash
 # 加密链路 smoke test（云南第 1 页 20 条 checklist）
-python3 tests/test_birdreport_yunnan.py
+python3 tests/probe_yunnan.py
 # 预期: Got 20 checklists. 样本字段 province_name=云南省 等
 ```
 

@@ -6,7 +6,7 @@ BirdTrace：给中国观鸟记录中心（birdreport.cn）数据做探索界面�
 ## 版本编号约定
 
 所有编号统一走产品线 **0.x → 1.0**，git tag 与 spec 版本同步：
-v0.8 = 6 月行程 MVP 快照（已打 tag）；0.9 = 当前工作稿（public demo + Explore 轮）；
+v0.1 = 6 月行程 MVP 快照（时间+地点→鸟种；git tag 待补）；v0.2 = 当前工作稿（public demo + Explore 轮）；
 **1.0 = 正式提案交付**（presentable specs + 可演示原型，面向朱雀会/记录中心）。
 spec 修订不再独立编号（不要再用 v2.x），在 0.x 内按日期记入各 spec 的 🔒 附录。
 合作提案方向（官方出品/集成形态/编外协作）属内部策略，只放 🔒 章节，提案会前不外发。
