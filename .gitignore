@@ -231,6 +231,5 @@ frontend/public/data/
 # the export needs them to build species links; they're not scraped artifacts.
 !data/raw/refs/
 
-# Multi-agent harness (agent.py) scratch output — inter-agent draft specs,
-# regenerated on every run; not source.
-birdtrace_workspace/
+# Multi-agent harness (agent.py) workspace: specs are tracked (review
+# artifacts); only transient run logs would be ignored if added later.
